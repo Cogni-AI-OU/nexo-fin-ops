@@ -1,0 +1,6 @@
+---
+# Example configuration for Nexo Payment Gateway
+base_url: https://pg.nexo.com
+api_key: "replace-with-api-key"  # pragma: allowlist secret -- example placeholder only
+# Request timeout in seconds
+timeout_seconds: 10
