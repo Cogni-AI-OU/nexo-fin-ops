@@ -1,0 +1,4235 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Nexo Pro API",
+    "description": "# Change log\n### **V1.1.7**\n > 20.04.2023\n - Added new endpoint for getting open orders in History section\n\n### **V1.1.6**\n > 6.04.2023\n - added timestamps to balance endpoints:\n\n > GET /api/v1/accountSummary\n\n > GET /api/v2/accountSummary\n\n > and to the websocket channel private/subscribe/balances\n - added timestamp to POST /orders/cancel response.\n\n### **V1.1.5**\n> 28.03.2023\n- Introduced accepted values for some fields in these REST endpoints:\n  - POST /api/v1/orders/twap Accepted values for \"executionInterval\" are 10|20|30.\n  - POST /api/v2/orders/twap Accepted values for \"twapDurationHours\" is а whole number between 0-48 and for \"twapDurationMinutes\" а whole number between 0-59.\n  - POST /api/v1/spot/metadata/order Maximum accepted value for \"size\" is 50.\n  - POST /api/v1/orders Maximum accepted value for \"pageSize\" is 50.\n  - POST /api/v1/trades Maximum accepted value for \"pageSize\" is 50.\n  - POST /api/v1/history/deposit-and-withdrawals Maximum accepted value for \"pageSize\" is 50.\n\n### **V1.1.4**\n > 24.03.2023\n - Added fees to WS OrderUpdateV2 chanel and to historical REST endpoints:\n\n     https://pro-api.nexo.io/api/v1/orders\n\n     https://pro-api.nexo.io/api/v3/orderDetails\n\n ### **V1.1.3**\n > 01.03.2023\n - Added new endpoint for getting current fee tiers of the user in Account section\n\n  ### **V1.1.2**\n > 24.02.2023\n - Added new endpoint for getting spot order metadata information\n\n ### **V1.1.1**\n > 14.02.2023\n - Added a new section describing how we handle rounding and precisions\n\n  ### **V1.1.0**\n > 13.02.2023\n - Added new version /v2/ for order updates in Websocket section\n\n ### **V1.0.4**\n > 10.02.2023\n - Added new endpoint for retrieving order details v3 (includes twap, advanced, oco, trigger orders)\n\n ### **V1.0.3**\n > 07.02.2023\n - Add pagination to history get trades endpoint\n\n ### **V1.0.2**\n > 06.02.2023\n - Added new endpoint for placing TWAP Orders v2 with minutes and hours\n\n ### **V1.0.1**\n > 01.02.2023\n - Added new endpoint that retrieves deposits and withdrawals history\n\n ### **V1.0.0**\n > 07.09.2022\n - Nexo Pro API release date.\n\n# Environments\n ### **Production:** https://pro-api.nexo.io\n ### **Websocket:** wss://pro-api.nexo.io\n # Introduction\nWelcome to the Nexo Pro API reference documentation. The Nexo Pro API provides all the tools for developers to implement balances checks, order placement and trade history display. Where applicable, API calls come with detailed information on both the request and response parameters, all in simple JSON format. We also include code snippets in Java, which can be viewed on the right. The documentation will evolve with time, so please view regularly to remain up-to-date with future versions.\n\n# Authentication\nAuthentication is carried out through an API-Key and a shared secret (API-Secret). The process itself involves HMAC Sha256 hashing to generate a signature on the client side and then compared to one generated with the same payload on the server side.\n\n# Limitations - rate limits\nNexo Pro API has rate limits to protect its services against attacks (e.g. DDoS attacks). For the REST API each API key has a default rate limit of 10 requests per second. The limit is negotiable and can be increased if more requests are needed.\n\nIf the rate limit is exceeded, the API will return `{\"errorCode\": 301, \"errorMessage\": \"Rate limit exceeded.\"}` with HTTP status 429 - Too many requests.\n\n# Roles\n\n Role-based access control (RBAC) refers to the idea of assigning permissions to users based on their role.\n Each Pro user has a role that represents the set of enpoints he can access.\n\n\n* **TRADER** - All endpoints including POST\n* **VIEWER** - All GET endpoints\n\nIf you do not have access to a specific endpoint, the API will return `{\"errorCode\": 103, \"errorMessage\": \"Access is denied.\"}`.\n\n# Error Codes\n* **100** - API-Key is malformed or invalid.\n* **101** - Request signature is malformed or invalid.\n* **102** - Some request field is malformed or missing.\n* **103** - Unauthorized.\n* **104** - Websocket method is invalid.\n* **105** - Websocket session is already authenticated.\n* **106** - Request nonce is malformed or invalid.\n* **203** - No results found for specified query.\n* **206** - Internal error.\n* **300** - The given exchanges are unsupported for said pair.\n* **301** - Rate limit exceeded.\n\n# Rounding and precisions\n* **Orders rounding** - For orders we e use floor rounding beyond the specific precision for the pair. For example for bitcoin amount precision we have 4, so you the lowest amount of BTC to order would be 0.0005. If you enter an amount with more decimals - for example 0.00059 it will be rounded to 0.0005.\n* **Crypto balances rounding** - For crypto balances we use floor rounding beyond the 8th decimal. For example if you have a balance of 0.000000018 it will be rounded to 0.00000001.\n* **Fees and Interest rates rounding** - For fees and interest rates beyond the 8th decimal we use floor rounding. 0.000000011 it will be rounded to 0.00000001.\n* **Fiat and stable coin rounding** - For crypto balances denominated values we use floor rounding beyond the 2nd decimal . For example if you have bitcoin worth 25.378 USD it will be rounded to 25.37 USD. Same rule applies for stable coins. If you have a balance of 25.378 USDT then the denominated value will be rounded to 25.37.\n\n# Websocket\n  We provide market data and order updates through our websocket API.\n The base websocket endpoint is **/api/ws/v1**.\n The websocket server accepts two types of messages:\n\n\n* **requests** - Characterized by having an id field in the payload. These messages expect a response to be returned with the same id.\n\n ```{\"id\":\"12345\",\"method\":\"private/ping\",\"ping\":\"ping1\"} ```\n\n* **notifications** - Do not expect a response.\n\n ```{\"method\":\"private/ping\",\"ping\":\"ping1\"} ```\n\n In order to subscirbe to a channel we must first open a connection to \"**wss://pro-api.nexo.io/api/ws/v1**\". Once successfully connected we must then authenticate our session by executing the following command:\n\n```{\"id\":\"auth11\",\"method\":\"public/auth\",\"apiKey\":\"api_key\",\"nonce\":<nonce>,\"signature\":\"<generated_signature>\"}```\n\nThe signature is generated exactly like the one for REST.\n## Order Book\n We currently support aggregated order book data with 150 price level depth and live updates.\n\n\nAfter successful authentication we can subscribe to the order book data channel:\n\n ```{\"id\": \"12345\",\"method\":\"private/subscribe/orderBook\",\"params\":{\"pair\":\"NEXO/USDT\"}}```\n\nSubsequently we can unsubscribe with:\n\n```{\"id\": \"12345\",\"method\":\"private/unsubscribe/orderBook\",\"params\":{\"pair\":\"NEXO/USDT\"}}```\n\nThere are two types of notifications that are pushed from the server from this channel:\n\n* **master frames** - Notifications that provide the book snapshot.\n\n ```{\"channel\":\"OB\",\"isMasterFrame\":true,\"pair\":\"DAI/USDT\",\"asks\":[{\"price\":0.9989,\"volume\":266.03}, ... ],\"bids\":[{\"price\":0.9981,\"volume\":149.05}, ... ]} ```\n\n* **delta frames** - Incremental updates to the order book state.\n\n ```{\"channel\":\"OB\",\"isMasterFrame\":false,\"pair\":\"DAI/USDT\",\"deltas\":[{\"price\":0.9953,\"volume\":2949.0,\"side\":\"BIDS\"}]} ```\n\n\n## Order Book v2\nV2 of our order book data streaming via websocket enhances its functionallity by introducing a configurable order book depth parameter. This improvement eliminates the hard cap of 150 price levels but it necessitates a change in our response payloads.\nLet us begin with the new message for subscribing to the v2 Order Book data stream.\n\n ```{\"id\": \"12345\",\"method\":\"private/subscribe/orderBook/v2\",\"params\":{\"pair\":\"NEXO/USDT\", \"orderBookDepth\": 150}}```\n\n The new configurable parameter is orderBookDepth, it accepts the following values:\n - 150\n - 200\n - 250\n - 300\n - 350\n - 400\n - 450\n - 500\n\n  As mentioned earlier there is a change in the notifications pushed by the server on this new channel.\n\n  * **master frames**\n\n  ```{\"channel\": \"OBv2\", \"isMasterFrame\": true, \"pair\": \"BTC/USDT\", \"chunk\": \"{\\\"asks\\\":[{\\\"price\\\":22835.0,\\\"volume\\\":0.55556678...\"}, \"isLast\": true}```\n\n  * **delta frames**\n\n  ```{\"channel\": \"OBv2\", \"isMasterFrame\": false, \"pair\": \"BTC/USDT\", \"deltas\": [{\"price\": 22826.0, \"volume\": 1.0E-4, \"side\": \"BIDS\"}, ... ]}```\n\n  The most significant difference is that master frames are now chunked, this is necessary due to the large size of messages when a user subscribes to a lot of price levels.\n\n  These chunks have to be assembled by the user, an example Java code snippet follows:\n\n  ```\n    //Obtain a StringBuilder and then when parsing messaged, do something like this:\n\n    if(isMasterFrame) {\n      stringBuilder.append(jsonMessage.get(\"chunk\").getAsJsonPrimitive().getAsString());\n      if(jsonMessage.get(\"isLast\").getAsBoolean()) {\n\n        var masterFrame = gson.fromJson(stringBuilder.toString(), MasterFrame.class);\n\n        System.out.printf(\"Number of asks price levels: %d%n\", masterFrame.getAsks().size());\n        System.out.printf(\"Number of bids price levels: %d%n\", masterFrame.getAsks().size());\n\n        stringBuilder.setLength(0);\n      }\n    }\n  ```\n\n\n ## Order Updates\n\n An order update can be triggered by any of following:\n- Order creation (eventType=creation)\n- Order matching (eventType=update)\n- Order cancellation (eventType=completion)\n- Order completion (eventType=completion)\n\nAfter successful authentication we can subscribe to the order updates data channel:\n\n ```{\"id\": \"12345\",\"method\":\"private/subscribe/orderUpdates\"}```\n\nSubsequently we can unsubscribe with:\n\n```{\"id\": \"12345\",\"method\":\"private/unsubscribe/orderUpdates\"}```\n\nThere are three types of events that are pushed from the server from this channel:\n\n* **creation** - The order has been accepted into the trading engine.\n\n ```{\"channel\":\"OU\",\"orderUpdatePayload\":{\"amountFilled\":\"0\",\"quantity\":\"20\",\"orderPrice\":\"0\",\"orderType\":\"market\",\"timestamp\":1644228738443,\"eventType\":\"CREATION\",\"orderId\":\"ece9b244-c59f-48aa-a318-8a94721db0ed\",\"orderStatus\":\"new\",\"symbol\":\"XRP/USDT\",\"side\":\"buy\"}} ```\n\n* **update** - Part of the order has filled.\n\n ```{\"channel\":\"OU\",\"orderUpdatePayload\":{\"amountFilled\":\"10\",\"quantity\":\"20\",\"orderPrice\":\"0.75685\",\"orderType\":\"market\",\"timestamp\":1644228755111,\"eventType\":\"UPDATE\",\"orderId\":\"ece9b244-c59f-48aa-a318-8a94721db0ed\",\"orderStatus\":\"active\",\"symbol\":\"XRP/USDT\", \"side\":\"buy\"}} ```\n\n* **completion** - The order was completed or cancelled.\n\n ```{\"channel\":\"OU\",\"orderUpdatePayload\":{\"amountFilled\":\"20\",\"quantity\":\"20\",\"orderPrice\":\"0.758275\",\"orderType\":\"market\",\"timestamp\":1644228751406,\"eventType\":\"COMPLETION\",\"orderId\":\"ece9b244-c59f-48aa-a318-8a94721db0ed\",\"orderStatus\":\"completed\",\"symbol\":\"XRP/USDT\",\"side\":\"buy\"}}```\n\n Example order update payload:\n  ```\n    {\n      \"amountFilled\": \"20\",\n      \"quantity\" : \"20\",\n      \"orderPrice\" : \"0.758275\",\n      \"orderType\" : \"market\",\n      \"timestamp\" : 1644228751406,   // Event time\n      \"eventType\" : \"COMPLETION\",   // CREATION, UPDATE, COMPLETION\n      \"orderId\" : \"ece9b244-c59f-48aa-a318-8a94721db0ed\",\n      \"orderStatus\" : \"completed\",   // new, active, completed, cancelled\n      \"symbol\" : \"XRP/USDT\",\n      \"side\" : \"buy\"\n    }\n  ```\n\n\n\n\n  Below you can find Java code snippet of how to maintain an in-memory order book and handle order updates:\n   ```\nimport static java.nio.charset.StandardCharsets.UTF_8;\n\n\nimport com.google.gson.JsonArray;\nimport com.google.gson.JsonObject;\nimport com.google.gson.JsonParser;\nimport java.io.IOException;\nimport java.net.URI;\nimport java.security.InvalidKeyException;\nimport java.security.NoSuchAlgorithmException;\nimport java.util.Base64;\nimport java.util.Comparator;\nimport java.util.Map;\nimport java.util.SortedMap;\nimport java.util.TreeMap;\nimport java.util.UUID;\nimport java.util.concurrent.TimeUnit;\nimport javax.crypto.Mac;\nimport javax.crypto.spec.SecretKeySpec;\nimport javax.websocket.ClientEndpoint;\nimport javax.websocket.CloseReason;\nimport javax.websocket.ContainerProvider;\nimport javax.websocket.DeploymentException;\nimport javax.websocket.OnClose;\nimport javax.websocket.OnError;\nimport javax.websocket.OnMessage;\nimport javax.websocket.OnOpen;\nimport javax.websocket.Session;\nimport javax.websocket.WebSocketContainer;\n\n@ClientEndpoint\npublic class WsOrderBookClient {\n    public static final String PRO_API_SERVER_URL = \"wss://pro-api.nexo.io/api/ws/v1\";\n    final WebSocketContainer webSocketContainer = ContainerProvider.getWebSocketContainer();\n    Session userSession;\n    boolean hasReceivedMasterFrame = false;\n    SortedMap<OrderBookKey, PriceLevel> asks = new TreeMap<>();\n    SortedMap<OrderBookKey, PriceLevel> bids = new TreeMap<>(Comparator.reverseOrder());\n\n    static class OrderBookKey implements Comparable<OrderBookKey> {\n        Double price;\n        String exchange;\n\n        public OrderBookKey(Double price, String exchange) {\n            this.price = price;\n            this.exchange = exchange;\n        }\n\n        @Override\n        public int compareTo(OrderBookKey other) {\n            if (this.price.equals(other.price)) {\n                return String.CASE_INSENSITIVE_ORDER.compare(this.exchange, other.exchange);\n            }\n            return Double.compare(this.price, other.price);\n        }\n    }\n\n    static public class PriceLevel {\n        Double price;\n        Double volume;\n        String exchange;\n\n        public PriceLevel(Double price, Double volume, String exchange) {\n            this.price = price;\n            this.volume = volume;\n            this.exchange = exchange;\n        }\n    }\n\n    public void connect() throws IOException, DeploymentException {\n        webSocketContainer.setDefaultMaxTextMessageBufferSize(32768);\n        webSocketContainer.connectToServer(this, URI.create(PRO_API_SERVER_URL));\n    }\n\n    @OnOpen\n    public void onOpen(Session userSession) throws NoSuchAlgorithmException, InvalidKeyException, IOException {\n        System.out.println(\"Opened ws connection to NEXO Pro API\");\n        this.userSession = userSession;\n        authenticateSession();\n    }\n\n    @OnMessage\n    public void onMessage(String message) throws IOException {\n        JsonObject jsonMessage = JsonParser.parseString(message).getAsJsonObject();\n        if(jsonMessage.has(\"channel\")) {\n            String channel = jsonMessage.get(\"channel\").getAsString();\n            if (\"OB\".equalsIgnoreCase(channel)) {\n                boolean isMasterFrame = jsonMessage.get(\"isMasterFrame\").getAsBoolean();\n                if (isMasterFrame) {\n                    asks.clear();\n                    bids.clear();\n                    handleMasterFrameLevels(jsonMessage.get(\"asks\").getAsJsonArray(), asks);\n                    handleMasterFrameLevels(jsonMessage.get(\"bids\").getAsJsonArray(), bids);\n                    hasReceivedMasterFrame = true;\n                } else {\n                    if (hasReceivedMasterFrame) {\n                        JsonArray deltas = jsonMessage.get(\"deltas\").getAsJsonArray();\n                        handleDeltaFrames(deltas);\n                        printBook();\n                    }\n                    // else skip update\n                }\n            } else if(\"OU\".equalsIgnoreCase(channel)) {\n                  var orderUpdatePayload = jsonMessage.get(\"orderUpdatePayload\").getAsJsonObject();\n                  var eventType = orderUpdatePayload.get(\"eventType\").getAsString();\n                  System.out.println(String.format(\"Received order %s event with payload: %s\", eventType, orderUpdatePayload.toString()));\n               }\n\n        }\n        else {\n            System.out.println(\"Received message: \" + message);\n            if(\"public/auth\".equalsIgnoreCase(jsonMessage.get(\"method\").getAsString())) {\n                JsonObject result = jsonMessage.get(\"result\").getAsJsonObject();\n                if(!result.has(\"error\")) {\n                    Boolean success = result.get(\"success\").getAsBoolean();\n                    if (success) {\n                        subscribeToOrderBookChannel();\n                        subscribeToOrderUpdatesChannel();\n                    }\n                }\n                else {\n                    System.out.println(\"Authentication failed\");\n                }\n            }\n        }\n    }\n\n    @OnClose\n    public void onClose(Session userSession, CloseReason reason) throws IOException, DeploymentException {\n        hasReceivedMasterFrame = false;\n        System.out.println(String.format(\"Connection to closed. reason: %s code: %d\", reason.getReasonPhrase(), reason.getCloseCode().getCode()));\n        connect();\n    }\n\n    @OnError\n    public void onError(Session userSession, Throwable throwable) {\n        System.out.println(String.format(\"Error: %s\", throwable.getMessage()));\n    }\n\n    private void subscribeToOrderBookChannel() throws IOException {\n        JsonObject payload = new JsonObject();\n        JsonObject params = new JsonObject();\n\n        params.addProperty(\"pair\", \"NEXO/ETH\");\n        payload.addProperty(\"id\", UUID.randomUUID().toString());\n        payload.addProperty(\"method\", \"private/subscribe/orderBook\");\n        payload.add(\"params\", params);\n\n        userSession.getBasicRemote().sendText(payload.toString());\n    }\n\n    private void subscribeToOrderUpdatesChannel() throws IOException {\n      JsonObject payload = new JsonObject();\n\n      payload.addProperty(\"id\", UUID.randomUUID().toString());\n      payload.addProperty(\"method\", \"private/subscribe/orderUpdates\");\n\n      userSession.getBasicRemote().sendText(payload.toString());\n    }\n\n    private void handleDeltaFrames(JsonArray deltas) {\n        deltas.forEach(delta -> {\n            JsonObject jsonDelta = delta.getAsJsonObject();\n            double price = jsonDelta.get(\"price\").getAsDouble();\n            double volume = jsonDelta.get(\"volume\").getAsDouble();\n            String exchange = jsonDelta.get(\"exchange\").getAsString();\n            String side = jsonDelta.get(\"side\").getAsString();\n\n            Map<OrderBookKey, PriceLevel> bookSide = \"BIDS\".equalsIgnoreCase(side) ? bids : asks;\n            if(volume == 0) {\n                bookSide.remove(new OrderBookKey(price, exchange));\n            }\n            else {\n                bookSide.put(new OrderBookKey(price, exchange), new PriceLevel(price, volume, exchange));\n            }\n        });\n    }\n\n    private void handleMasterFrameLevels(JsonArray priceLevels, Map<OrderBookKey, PriceLevel> bookSide) {\n        priceLevels.forEach(priceLevel -> {\n            JsonObject jsonLevel = priceLevel.getAsJsonObject();\n            double price = jsonLevel.get(\"price\").getAsDouble();\n            double volume = jsonLevel.get(\"volume\").getAsDouble();\n            String exchange = jsonLevel.get(\"exchange\").getAsString();\n            PriceLevel level = new PriceLevel(price, volume, exchange);\n            bookSide.put(new OrderBookKey(price, exchange), level);\n        });\n    }\n\n    private void authenticateSession() throws NoSuchAlgorithmException, InvalidKeyException, IOException {\n        long nonce = System.currentTimeMillis();\n        SecretKeySpec secretSpec = new SecretKeySpec(\"<API_SECRET>\".getBytes(), \"HmacSHA256\");\n        Mac mac = Mac.getInstance(\"HmacSHA256\");\n        mac.init(secretSpec);\n        String result = Base64.getEncoder().encodeToString(mac.doFinal(Long.toString(nonce).getBytes(UTF_8)));\n\n\n        JsonObject payload = new JsonObject();\n        payload.addProperty(\"id\", \"id12\");\n        payload.addProperty(\"method\", \"public/auth\");\n        payload.addProperty(\"apiKey\", \"<API_KEY>\");\n        payload.addProperty(\"nonce\", nonce);\n        payload.addProperty(\"signature\", result);\n\n        userSession.getBasicRemote().sendText(payload.toString());\n    }\n\n    private void sendPing() throws IOException {\n        JsonObject payload = new JsonObject();\n        payload.addProperty(\"id\", UUID.randomUUID().toString());\n        payload.addProperty(\"method\", \"private/ping\");\n        payload.addProperty(\"ping\", \"1337\");\n\n        userSession.getBasicRemote().sendText(payload.toString());\n    }\n\n    private void printBook() {\n        StringBuilder sb = new StringBuilder();\n        this.asks.entrySet().stream().limit(10).forEach(level -> {\n            PriceLevel pLevel = level.getValue();\n            sb.append(String.format(\"%f\\t\\t\\t\\t%f\\t\\t\\t\\t%s\\n\", pLevel.price, pLevel.volume, pLevel.exchange));\n        });\n        sb.append(String.format(\"asks %d\\n\", asks.size()));\n        sb.append(String.format(\"bids %d\\n\", bids.size()));\n        this.bids.entrySet().stream().limit(10).forEach(level -> {\n            PriceLevel pLevel = level.getValue();\n            sb.append(String.format(\"%f\\t\\t\\t\\t%f\\t\\t\\t\\t%s\\n\", pLevel.price, pLevel.volume, pLevel.exchange));\n        });\n        System.out.println(sb.toString());\n    }\n\n    public static void main(String[] args) throws IOException, DeploymentException, InterruptedException {\n        WsOrderBookClient client = new WsOrderBookClient();\n        client.connect();\n        new Thread(() -> {\n            while (true) {\n                try {\n                    TimeUnit.SECONDS.sleep(10);\n                    client.sendPing();\n                } catch (InterruptedException | IOException e) {\n                    e.printStackTrace();\n                }\n            }\n        }).start();\n    }\n}\n```\n\n ## Order Updates v2\n\n An order update can be triggered by any of following:\n- Order creation (eventType=creation)\n- Order matching (eventType=update)\n- Order cancellation (eventType=completion)\n- Order completion (eventType=completion)\n\nAfter successful authentication we can subscribe to the order updates data channel:\n\n ```{\"id\": \"12345\",\"method\":\"private/subscribe/orderUpdates/v2\"}```\n\nSubsequently we can unsubscribe with:\n\n```{\"id\": \"12345\",\"method\":\"private/unsubscribe/orderUpdates\"}```\n\nThere are three types of events that are pushed from the server from this channel:\n\n* **creation** - The order has been accepted into the trading engine.\n\n ```{\"channel\":\"OU\",\"orderUpdatePayload\":{\"amountFilled\":\"0\",\"quantity\":\"20\",\"price\":\"0\",\"type\":\"market\",\"timestamp\":1644228738443,\"eventType\":\"CREATION\",\"id\":\"ece9b244-c59f-48aa-a318-8a94721db0ed\",\"status\":\"new\",\"symbol\":\"XRP/USDT\",\"side\":\"buy\"}} ```\n\n* **update** - Part of the order has filled.\n\n ```{\"channel\":\"OU\",\"orderUpdatePayload\":{\"amountFilled\":\"10\",\"quantity\":\"20\",\"price\":\"0.75685\",\"type\":\"market\",\"timestamp\":1644228755111,\"eventType\":\"UPDATE\",\"id\":\"ece9b244-c59f-48aa-a318-8a94721db0ed\",\"status\":\"active\",\"symbol\":\"XRP/USDT\", \"side\":\"buy\"}} ```\n\n* **completion** - The order was completed or cancelled.\n\n ```{\"channel\":\"OU\",\"orderUpdatePayload\":{\"amountFilled\":\"20\",\"quantity\":\"20\",\"price\":\"0.758275\",\"type\":\"market\",\"timestamp\":1644228751406,\"eventType\":\"COMPLETION\",\"id\":\"ece9b244-c59f-48aa-a318-8a94721db0ed\",\"status\":\"completed\",\"symbol\":\"XRP/USDT\",\"side\":\"buy\",\"fees\":[{\"asset\":\"XRP\",\"amount\":\"0.005\"},{\"asset\":\"NEXO\",\"amount\":\"0.00567\"}]}}```\n\n Example order update payload:\n  ```\n    {\n      \"amountFilled\": \"20\",\n      \"quantity\" : \"20\",\n      \"price\" : \"0.758275\",\n      \"type\" : \"market\",\n      \"timestamp\" : 1644228751406,   // Event time\n      \"eventType\" : \"COMPLETION\",   // CREATION, UPDATE, COMPLETION\n      \"id\" : \"ece9b244-c59f-48aa-a318-8a94721db0ed\",\n      \"status\" : \"completed\",   // new, active, completed, cancelled\n      \"symbol\" : \"XRP/USDT\",\n      \"side\" : \"buy\",\n      \"fees\":[\n        {\"asset\":\"XRP\",\"amount\":\"0.005\"},\n        {\"asset\":\"NEXO\",\"amount\":\"0.00567\"}\n       ]\n }\n  ```",
+    "version": "v1",
+    "x-logo": {
+      "url": "https://seekvectorlogo.com/wp-content/uploads/2019/09/nexo-io-vector-logo-small.png",
+      "altText": "Nexo"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://pro-api.nexo.io",
+      "description": "Production server (uses live data)"
+    }
+  ],
+  "paths": {
+    "/api/v1/accountSummary": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Retrieves account balances.",
+        "description": "Retrieves a list of available assets and their corresponding balances.\n \n Roles allowed: TRADER, VIEWER",
+        "operationId": "getAccountSummary",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Found balances.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BalancesResponse"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from the service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "balances": [
+                        {
+                          "assetName": "NEXO",
+                          "totalBalance": "5000",
+                          "availableBalance": "3500",
+                          "lockedBalance": "1500",
+                          "debt": "10.0",
+                          "interest": "12.334",
+                          "lastUpdated": "12-03-2022T10:01:34Z+02:00"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Authentication failure."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "No balances found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-500": {
+                    "summary": "500 from the service directly",
+                    "description": "Service-500",
+                    "value": {
+                      "errorCode": 500,
+                      "errorMessage": "No balances found."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/feeTier": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Retrieves current fee tiers",
+        "description": "Returns information about the current fee tiers of the user.\n \n Roles allowed: TRADER",
+        "operationId": "getFeeTiers",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Found fee tiers.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FeeTiersResponse"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from the service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "tradingTakerFeePercent": 0.1,
+                      "tradingMakerFeePercent": 0.564,
+                      "futuresTakerFeePercent": 0.3245,
+                      "futuresMakerFeePercent": 0.25652,
+                      "currentSpotVolumeTier": {
+                        "id": 12,
+                        "amountFromUsd": 100000,
+                        "amountToUsd": 1000000
+                      },
+                      "currentFuturesVolumeTier": {
+                        "id": 9,
+                        "amountFromUsd": 0,
+                        "amountToUsd": 10000
+                      },
+                      "spot30DaysTradingVolume": 193674.2402,
+                      "futures30DaysTradingVolume": 579.34168,
+                      "totalFeesPaid": [
+                        {
+                          "assetName": "BTC",
+                          "amountTotalFee": 0.006226
+                        },
+                        {
+                          "assetName": "NEXO",
+                          "amountTotalFee": 285.83
+                        },
+                        {
+                          "assetName": "USDT",
+                          "amountTotalFee": 831.378
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Authentication failure."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/pairs": {
+      "get": {
+        "tags": [
+          "Pairs"
+        ],
+        "summary": "Get a list of all pairs, min and max amounts.",
+        "description": "Returns a list of all pairs that can be traded on Nexo Pro, along with the minimum and maximum amounts that can be traded per trade. \n \n Roles allowed: TRADER, VIEWER",
+        "operationId": "getQuote",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of pairs, min and max limits.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PairsResponse"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from the service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "pairs": [
+                        "BTC/USDT",
+                        "ETH/BTC"
+                      ],
+                      "min_limits": {
+                        "BTC": "0.00108045000000000016",
+                        "ETH": "0.0220500000000000002"
+                      },
+                      "max_limits": {
+                        "BTC": "2.94182539999999992",
+                        "ETH": "49.8777993899999998"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Authentication failure."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/quote": {
+      "get": {
+        "tags": [
+          "Quote"
+        ],
+        "summary": "Get a price quote.",
+        "description": "Get an approximate current price for the provided pair, side and amount. \n \n Roles allowed: TRADER, VIEWER",
+        "operationId": "getQuote",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pair",
+            "in": "query",
+            "description": "The pair for the quote",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "amount",
+            "in": "query",
+            "description": "The amount for the quote",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "side",
+            "in": "query",
+            "description": "The side for the quote buy or sell. (Case sensitive)",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "buy",
+                "sell"
+              ]
+            }
+          },
+          {
+            "name": "exchanges",
+            "in": "query",
+            "description": "The exchanges for the quote, comma seperated list, if omitted quote will be returned for all supported exchanges.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Quote successfully retrieved.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Quote"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from the service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "pair": "BTC/USDT",
+                      "amount": "0.001",
+                      "price": "33957.88020000",
+                      "timestamp": 1624452686
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Authentication failure."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders": {
+      "post": {
+        "tags": [
+          "Order"
+        ],
+        "summary": "Places an order.",
+        "description": "Places an order and instantly returns the id, as execution against exchanges is asynchronous. Use the id to get more specific information via /api/v1/orderDetails endpoint. \n \n Roles allowed: TRADER",
+        "operationId": "placeOrder",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceOrderRequest"
+              },
+              "example": {
+                "pair": "NEXO/USDT",
+                "side": "sell",
+                "type": "market",
+                "quantity": "6"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Order successfully placed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceOrderResponse"
+                },
+                "examples": {
+                  "id": {
+                    "description": "id",
+                    "value": {
+                      "id": "1234567768_8989"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "response": {
+                    "description": "response",
+                    "value": {
+                      "errorCode": 202,
+                      "errorMessage": "Internal server error"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "No orders found for the requested pairs in the specified time frame.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "response": {
+                    "description": "response",
+                    "value": {
+                      "errorCode": 101,
+                      "errorMessage": "Invalid signature"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Java",
+            "source": "var url = \"<API_ENDPOINT>\";\nvar nonce = Long.toString(System.currentTimeMillis());\nvar secretSpec = new SecretKeySpec(\"api_secret\".getBytes(), \"HmacSHA256\");\nvar mac = Mac.getInstance(\"HmacSHA256\");\nmac.init(secretSpec);\nvar signature = Base64.getEncoder().encodeToString(mac.doFinal(nonce.getBytes(UTF_8)));\n\nvar requestBody = new JsonObject();\nrequestBody.addProperty(\"tradingPair\", \"NEXO/USDT\");\nrequestBody.addProperty(\"side\", \"sell\");\nrequestBody.addProperty(\"type\", \"market\");\nrequestBody.addProperty(\"quantity\", \"6\");\n\nvar httpClient = HttpClient.newHttpClient();\nvar request = HttpRequest.newBuilder(URI.create(url))\n    .header(\"Content-Type\", \"application/json\")\n    .header(\"X-API-KEY\", \"api_key\")\n    .header(\"X-NONCE\", nonce)\n    .header(\"X-SIGNATURE\", signature)\n    .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))\n    .build();\n\nvar response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());      \n"
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "History"
+        ],
+        "summary": "Retrieves order history.",
+        "description": "Retrieves order history for a selected pair or list of pairs, in a specific timeframe. Supports pagination for ease of use. \n \n Roles allowed: TRADER, VIEWER",
+        "operationId": "getDealHistory",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pairs",
+            "in": "query",
+            "description": "List of pairs to get orders from",
+            "required": false,
+            "schema": {
+              "uniqueItems": true,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Milliseconds timestamp for beginning of search period.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "Milliseconds timestamp for end of search period.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Page size of search result. Maximum accepted value is 50.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageNum",
+            "in": "query",
+            "description": "Page number of search result",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The orders executed in the given time frame.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderHistoryResponse"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from the service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "orders": [
+                        {
+                          "id": "532900010277356_222262959",
+                          "side": "buy",
+                          "pair": "NEXO/USDT",
+                          "timestamp": 1623253114,
+                          "quantity": "24.49",
+                          "exchangeRate": "2.15",
+                          "executedQuantity": "24.49",
+                          "fees": [
+                            {
+                              "asset": "XRP",
+                              "amount": "0.005"
+                            },
+                            {
+                              "asset": "NEXO",
+                              "amount": "0.00567"
+                            }
+                          ]
+                        },
+                        {
+                          "id": "4680059007950532_147268042",
+                          "side": "buy",
+                          "pair": "NEXO/USDT",
+                          "timestamp": 1622814188,
+                          "quantity": "23.10",
+                          "exchangeRate": "2.132",
+                          "executedQuantity": "12.45",
+                          "fees": [
+                            {
+                              "asset": "XRP",
+                              "amount": "0.005"
+                            },
+                            {
+                              "asset": "NEXO",
+                              "amount": "0.00567"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Authentication failure."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "No orders found for the requested pairs in the specified time frame.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Deal with the specified id cannot be found."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/cancel": {
+      "post": {
+        "tags": [
+          "Order"
+        ],
+        "summary": "Cancels an order.",
+        "description": "Cancel an existing order.\n \nRoles allowed: TRADER",
+        "operationId": "cancelOrder",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancellOrderRequest"
+              },
+              "example": {
+                "orderID": "8037298b-3ba4-41f9-8718-8a7bf87560f6"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Order successfully cancelled."
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "response": {
+                    "description": "response",
+                    "value": {
+                      "errorCode": 202,
+                      "errorMessage": "Deal 8037298b-3ba4-41f9-8718-8a7bf87560f6 already cancelled."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Java",
+            "source": "var url = \"<API_ENDPOINT>\";\nvar nonce = Long.toString(System.currentTimeMillis());\nvar secretSpec = new SecretKeySpec(\"api_secret\".getBytes(), \"HmacSHA256\");\nvar mac = Mac.getInstance(\"HmacSHA256\");\nmac.init(secretSpec);\nvar signature = Base64.getEncoder().encodeToString(mac.doFinal(nonce.getBytes(UTF_8)));\n\nvar requestBody = new JsonObject();\nrequestBody.addProperty(\"orderId\", \"8037298b-3ba4-41f9-8718-8a7bf87560f6\");\n\n\nvar httpClient = HttpClient.newHttpClient();\nvar request = HttpRequest.newBuilder(URI.create(url))\n    .header(\"Content-Type\", \"application/json\")\n    .header(\"X-API-KEY\", \"api_key\")\n    .header(\"X-NONCE\", nonce)\n    .header(\"X-SIGNATURE\", signature)\n    .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))\n    .build();\n\nvar response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());\n"
+          }
+        ]
+      }
+    },
+    "/api/v1/orders/cancel/all": {
+      "post": {
+        "tags": [
+          "Order"
+        ],
+        "summary": "Cancels all orders.",
+        "description": "Cancels all existing orders for a given pair.\n \nRoles allowed: TRADER",
+        "operationId": "cancelAllOrders",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelAllOrdersRequest"
+              },
+              "example": {
+                "pair": "BTC/USDT"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Orders successfully cancelled."
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "response": {
+                    "description": "response",
+                    "value": {
+                      "errorCode": 202,
+                      "errorMessage": "No deals for pair BTC/USDT."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Java",
+            "source": "var url = \"<API_ENDPOINT>\";\nvar nonce = Long.toString(System.currentTimeMillis());\nvar secretSpec = new SecretKeySpec(\"api_secret\".getBytes(), \"HmacSHA256\");\nvar mac = Mac.getInstance(\"HmacSHA256\");\nmac.init(secretSpec);\nvar signature = Base64.getEncoder().encodeToString(mac.doFinal(nonce.getBytes(UTF_8)));\n\nvar requestBody = new JsonObject();\nrequestBody.addProperty(\"pair\", \"BTC/USDT\");\n\n\nvar httpClient = HttpClient.newHttpClient();\nvar request = HttpRequest.newBuilder(URI.create(url))\n    .header(\"Content-Type\", \"application/json\")\n    .header(\"X-API-KEY\", \"api_key\")\n    .header(\"X-NONCE\", nonce)\n    .header(\"X-SIGNATURE\", signature)\n    .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))\n    .build();\n\nvar response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());            \n"
+          }
+        ]
+      }
+    },
+    "/api/v1/orders/trigger": {
+      "post": {
+        "tags": [
+          "Order"
+        ],
+        "summary": "Places a trigger order.",
+        "description": "Places a trigger order and instantly returns the id, as execution is asynchronous.\n \n Roles allowed: TRADER",
+        "operationId": "placeTriggerOrder",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceTriggerOrderRequest"
+              },
+              "example": {
+                "pair": "BTC/USDT",
+                "side": "buy",
+                "triggerPrice": 19300,
+                "triggerType": "stopLoss",
+                "amount": 0.001
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Order successfully placed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceTriggerOrderResponse"
+                },
+                "examples": {
+                  "id": {
+                    "description": "id",
+                    "value": {
+                      "id": "1234567768_8989"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "response": {
+                    "description": "response",
+                    "value": {
+                      "errorCode": 202,
+                      "errorMessage": "Internal server error"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Java",
+            "source": "var url = \"<API_ENDPOINT>\";\nvar nonce = Long.toString(System.currentTimeMillis());\nvar secretSpec = new SecretKeySpec(\"api_secret\".getBytes(), \"HmacSHA256\");\nvar mac = Mac.getInstance(\"HmacSHA256\");\nmac.init(secretSpec);\nvar signature = Base64.getEncoder().encodeToString(mac.doFinal(nonce.getBytes(UTF_8)));\n\nvar requestBody = new JsonObject();\nrequestBody.addProperty(\"pair\", \"BTC/USDT\");\nrequestBody.addProperty(\"side\", \"buy\");\nrequestBody.addProperty(\"triggerPrice\", \"19300.0\");\nrequestBody.addProperty(\"triggerType\", \"stopLoss\");\nrequestBody.addProperty(\"amount\", \"0.001\");\n\nvar httpClient = HttpClient.newHttpClient();\nvar request = HttpRequest.newBuilder(URI.create(url))\n    .header(\"Content-Type\", \"application/json\")\n    .header(\"X-API-KEY\", \"api_key\")\n    .header(\"X-NONCE\", nonce)\n    .header(\"X-SIGNATURE\", signature)\n    .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))\n    .build();\n\nvar response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());      \n"
+          }
+        ]
+      }
+    },
+    "/api/v1/orders/advanced": {
+      "post": {
+        "tags": [
+          "Order"
+        ],
+        "summary": "Places an advanced order.",
+        "description": "Places an advanced order and instantly returns the id, as execution is asynchronous.\n \n Roles allowed: TRADER",
+        "operationId": "placeAdvancedOrder",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceAdvancedOrderRequest"
+              },
+              "example": {
+                "pair": "BTC/USDT",
+                "side": "buy",
+                "stopLossPrice": "18000",
+                "takeProfitPrice": "22000",
+                "amount": "0.001"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Order successfully placed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceAdvancedOrderResponse"
+                },
+                "examples": {
+                  "id": {
+                    "description": "id",
+                    "value": {
+                      "id": "1234567768_8989"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "response": {
+                    "description": "response",
+                    "value": {
+                      "errorCode": 202,
+                      "errorMessage": "Internal server error"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Java",
+            "source": "var url = \"<API_ENDPOINT>\";\nvar nonce = Long.toString(System.currentTimeMillis());\nvar secretSpec = new SecretKeySpec(\"api_secret\".getBytes(), \"HmacSHA256\");\nvar mac = Mac.getInstance(\"HmacSHA256\");\nmac.init(secretSpec);\nvar signature = Base64.getEncoder().encodeToString(mac.doFinal(nonce.getBytes(UTF_8)));\n\nvar requestBody = new JsonObject();\nrequestBody.addProperty(\"pair\", \"BTC/USDT\");\nrequestBody.addProperty(\"side\", \"buy\");\nrequestBody.addProperty(\"stopLossPrice\", \"18000.0\");\nrequestBody.addProperty(\"takeProfitPrice\", \"19500.0\");\nrequestBody.addProperty(\"amount\", \"0.001\");\n\nvar httpClient = HttpClient.newHttpClient();\nvar request = HttpRequest.newBuilder(URI.create(url))\n    .header(\"Content-Type\", \"application/json\")\n    .header(\"X-API-KEY\", \"api_key\")\n    .header(\"X-NONCE\", nonce)\n    .header(\"X-SIGNATURE\", signature)\n    .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))\n    .build();\n\nvar response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());          \n"
+          }
+        ]
+      }
+    },
+    "/api/v1/orders/twap": {
+      "post": {
+        "tags": [
+          "Order"
+        ],
+        "summary": "Places a TWAP order.",
+        "description": "Places a TWAP order and instantly returns the id, as execution against exchanges is asynchronous. Use the id to get more specific information via /api/v1/orderDetails endpoint. \n \n Roles allowed: TRADER",
+        "operationId": "placeTwapOrder",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwapOrderRequest"
+              },
+              "example": {
+                "pair": "NEXO/USDT",
+                "side": "sell",
+                "quantity": "10000",
+                "executionInterval": "10",
+                "splits": "100"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Twap is scheduled for execution successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TwapOrderResponse"
+                },
+                "example": {
+                  "dealID": "1234567768_8989",
+                  "amount": "10000"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "response": {
+                    "description": "response",
+                    "value": {
+                      "errorCode": 202,
+                      "errorMessage": "Internal server error"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Java",
+            "source": "var url = \"<API_ENDPOINT>\";\nvar nonce = Long.toString(System.currentTimeMillis());\nvar secretSpec = new SecretKeySpec(\"api_secret\".getBytes(), \"HmacSHA256\");\nvar mac = Mac.getInstance(\"HmacSHA256\");\nmac.init(secretSpec);\nvar signature = Base64.getEncoder().encodeToString(mac.doFinal(nonce.getBytes(UTF_8)));\n\nvar requestBody = new JsonObject();\nrequestBody.addProperty(\"pair\", \"NEXO/USDT\");\nrequestBody.addProperty(\"side\", \"sell\");\nrequestBody.addProperty(\"splits\", 10);\nrequestBody.addProperty(\"quantity\", 10000);\nrequestBody.addProperty(\"executionInterval\", 10);\n\nvar httpClient = HttpClient.newHttpClient();\nvar request = HttpRequest.newBuilder(URI.create(url))\n    .header(\"Content-Type\", \"application/json\")\n    .header(\"X-API-KEY\", \"api_key\")\n    .header(\"X-NONCE\", nonce)\n    .header(\"X-SIGNATURE\", signature)\n    .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))\n    .build();\n\nvar response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());      \n"
+          }
+        ]
+      }
+    },
+    "/api/v2/accountSummary": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Retrieves account balances.",
+        "description": "Retrieves a list of available assets and their corresponding balances.\n \n Roles allowed: TRADER, VIEWER",
+        "operationId": "getAccountSummary",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Found balances.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WalletBalance_V2"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from the service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "balances": [
+                        {
+                          "assetName": "NEXO",
+                          "total": "5030",
+                          "available": "2000",
+                          "lockedLimits": "1500",
+                          "lockedFuturePositions": "1500",
+                          "debt": "10.0",
+                          "interest": "20.0",
+                          "unrealizedPnl": "20.0",
+                          "lastUpdated": "12-03-2022T10:01:34Z+02:00"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Authentication failure."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "No balances found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-500": {
+                    "summary": "500 from the service directly",
+                    "description": "Service-500",
+                    "value": {
+                      "errorCode": 500,
+                      "errorMessage": "No balances found."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/orders/twap": {
+      "post": {
+        "tags": [
+          "Order"
+        ],
+        "summary": "Places a TWAP order v2.",
+        "description": "Places a TWAP order and instantly returns the id, as execution against exchanges is asynchronous. Use the id to get more specific information via /api/v1/orderDetails endpoint. \n \n Roles allowed: TRADER",
+        "operationId": "placeTwapOrderV2",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TwapOrderRequest"
+              },
+              "example": {
+                "pair": "NEXO/USDT",
+                "side": "sell",
+                "quantity": "10000",
+                "twapDurationHours": "0",
+                "twapDurationMinutes": "30"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Twap is scheduled for execution successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TwapOrderResponse"
+                },
+                "example": {
+                  "dealID": "1234567768_8989",
+                  "amount": "10000"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "response": {
+                    "description": "response",
+                    "value": {
+                      "errorCode": 202,
+                      "errorMessage": "Internal server error"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "x-codeSamples": [
+          {
+            "lang": "Java",
+            "source": "var url = \"<API_ENDPOINT>\";\nvar nonce = Long.toString(System.currentTimeMillis());\nvar secretSpec = new SecretKeySpec(\"api_secret\".getBytes(), \"HmacSHA256\");\nvar mac = Mac.getInstance(\"HmacSHA256\");\nmac.init(secretSpec);\nvar signature = Base64.getEncoder().encodeToString(mac.doFinal(nonce.getBytes(UTF_8)));\n\nvar requestBody = new JsonObject();\nrequestBody.addProperty(\"pair\", \"NEXO/USDT\");\nrequestBody.addProperty(\"side\", \"sell\");\nrequestBody.addProperty(\"splits\", 10);\nrequestBody.addProperty(\"quantity\", 10000);\nrequestBody.addProperty(\"executionInterval\", 10);\n\nvar httpClient = HttpClient.newHttpClient();\nvar request = HttpRequest.newBuilder(URI.create(url))\n    .header(\"Content-Type\", \"application/json\")\n    .header(\"X-API-KEY\", \"api_key\")\n    .header(\"X-NONCE\", nonce)\n    .header(\"X-SIGNATURE\", signature)\n    .POST(HttpRequest.BodyPublishers.ofString(requestBody.toString()))\n    .build();\n\nvar response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());      \n"
+          }
+        ]
+      }
+    },
+    "/api/v1/spot/metadata/order": {
+      "get": {
+        "tags": [
+          "Order"
+        ],
+        "summary": "Order placemenet metadata.",
+        "description": "Provide metadata information for spot order. \n \n Roles allowed: TRADER",
+        "operationId": "metadataOrder",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pairs",
+            "in": "query",
+            "description": "Specific pair/s that can be traded on Nexo Prime. Example: BTC/USDT, ETH/USDT /comma separated list/. If pair/s are not passed return all available pairs. (Case sensitive)",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "size",
+            "in": "query",
+            "description": "Page size of search result. Maximum accepted value is 50.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "description": "Page number of search result",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Order metadata response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderMetadataResponse"
+                },
+                "examples": {
+                  "orderMetadata": {
+                    "value": {
+                      "orderMetadata": {
+                        "content": [
+                          {
+                            "pair": "BTC/USDT",
+                            "minOrderSize": "0.0001",
+                            "maxOrderSize": "1000000",
+                            "currentPrice": "24548.22863372",
+                            "amountPrecision": "4",
+                            "pricePrecision": "0"
+                          },
+                          {
+                            "pair": "ETH/USD",
+                            "minOrderSize": "0.01",
+                            "maxOrderSize": "1000000",
+                            "currentPrice": "1672.05677530",
+                            "amountPrecision": "3",
+                            "pricePrecision": "1"
+                          }
+                        ],
+                        "pageable": {
+                          "sort": {
+                            "sorted": false,
+                            "unsorted": true,
+                            "empty": true
+                          },
+                          "offset": 0,
+                          "pageNumber": 0,
+                          "pageSize": 20,
+                          "unpaged": "false",
+                          "paged": "true"
+                        },
+                        "last": "true",
+                        "totalPages": 1,
+                        "totalElements": 2,
+                        "size": 2,
+                        "number": 0,
+                        "sort": {
+                          "sorted": "false",
+                          "unsorted": "true",
+                          "empty": "true"
+                        },
+                        "first": "true",
+                        "numberOfElements": 2,
+                        "empty": "false"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Authentication failure.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "response": {
+                    "description": "response",
+                    "value": {
+                      "errorCode": "202",
+                      "errorMessage": "Internal server error"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orderDetails": {
+      "get": {
+        "tags": [
+          "History"
+        ],
+        "summary": "Retrieves information for a specific order.",
+        "description": "Retrieves detailed information for the order corresponding to the provided order_id. \n \n Roles allowed: TRADER, VIEWER",
+        "operationId": "getDealDetails",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detailed information for the order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetailsResponse"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "id": "4680077244064542_931689063",
+                      "side": "sell",
+                      "pair": "NEXO/USDT",
+                      "timestamp": 1623252758,
+                      "quantity": "1000",
+                      "exchangeRate": "2.034",
+                      "executedQuantity": "1000",
+                      "trades": [
+                        {
+                          "id": "5288",
+                          "symbol": "NEXO/USDT",
+                          "type": "market",
+                          "orderAmount": "1000",
+                          "amountFilled": "1000",
+                          "executedPrice": "2.034",
+                          "timestamp": 1623252761,
+                          "status": "completed"
+                        }
+                      ],
+                      "filledSplits": 2,
+                      "totalSplits": 3,
+                      "primeFeeAmount": "0.0002",
+                      "primeFeeAsset": "USDT"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Invalid request field."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Deal with the specified id cannot be found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Deal with the specified id cannot be found."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v2/orderDetails": {
+      "get": {
+        "tags": [
+          "History"
+        ],
+        "summary": "Retrieves information for a specific order v2",
+        "description": "Retrieves detailed information for the order corresponding to the provided order_id (including trigger orders). \n \n Roles allowed: TRADER, VIEWER",
+        "operationId": "getDealDetails2",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detailed information for the order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetailsResponse"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "id": "4680077244064542_931689063",
+                      "side": "sell",
+                      "pair": "NEXO/USDT",
+                      "timestamp": 1623252758,
+                      "quantity": "1000",
+                      "exchangeRate": "2.034",
+                      "triggerPrice": null,
+                      "trailingDistance": null,
+                      "trailingPercentage": null,
+                      "type": "market",
+                      "executedQuantity": "1000",
+                      "status": "completed",
+                      "trades": [
+                        {
+                          "id": "5288",
+                          "symbol": "NEXO/USDT",
+                          "type": "market",
+                          "orderAmount": "1000",
+                          "amountFilled": "1000",
+                          "executedPrice": "2.034",
+                          "timestamp": 1623252761,
+                          "status": "filled"
+                        }
+                      ],
+                      "filledSplits": 2,
+                      "totalSplits": 3,
+                      "primeFeeAmount": "0.0002",
+                      "primeFeeAsset": "USDT"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Invalid request field."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Deal with the specified id cannot be found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Deal with the specified id cannot be found."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v3/orderDetails": {
+      "get": {
+        "tags": [
+          "History"
+        ],
+        "summary": "Retrieves information for a specific order v3.",
+        "description": "Retrieves detailed information for the order corresponding to the provided order_id (including advanced, oco, twap, trigger orders). \n \n Roles allowed: TRADER, VIEWER",
+        "operationId": "getDealDetails3",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detailed information for the order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderDetailsV3Response"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "orderId": "4680077244064542_931689063",
+                      "side": "sell",
+                      "pair": "NEXO/USDT",
+                      "timestamp": 1623252758,
+                      "quantity": "1000",
+                      "price": "2.034",
+                      "triggerPrice": null,
+                      "trailingDistance": null,
+                      "trailingPercentage": null,
+                      "type": "market",
+                      "executedQuantity": "1000",
+                      "status": "completed",
+                      "tradeFee": 0.0001,
+                      "feeAsset": "USDT",
+                      "filledSplits": 3,
+                      "totalSplits": 5,
+                      "timeInForce": "gtc",
+                      "trades": [
+                        {
+                          "tradeId": "5288",
+                          "symbol": "NEXO/USDT",
+                          "type": "market",
+                          "orderAmount": "1000",
+                          "amountFilled": "1000",
+                          "executedPrice": "2.034",
+                          "timestamp": 1623252761,
+                          "status": "filled"
+                        }
+                      ],
+                      "fees": [
+                        {
+                          "asset": "XRP",
+                          "amount": "0.005"
+                        },
+                        {
+                          "asset": "NEXO",
+                          "amount": "0.00567"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Invalid request field."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Deal with the specified id cannot be found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Deal with the specified id cannot be found."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trades": {
+      "get": {
+        "tags": [
+          "History"
+        ],
+        "summary": "Retrieves trades history.",
+        "description": "Retrieves trades history for a selected pair or list of pairs in a specific timeframe. Supports pagination for ease of use. \n \n Roles allowed: TRADER, VIEWER",
+        "operationId": "getOrderDetails",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pairs",
+            "in": "query",
+            "description": "List of pairs to get trades from",
+            "required": false,
+            "schema": {
+              "uniqueItems": true,
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "startDate",
+            "in": "query",
+            "description": "Milliseconds timestamp for beginning of search period.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "endDate",
+            "in": "query",
+            "description": "Milliseconds timestamp for end of search period.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Page size of search result. Maximum accepted value is 50.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 20
+            }
+          },
+          {
+            "name": "pageNum",
+            "in": "query",
+            "description": "Page number of search result.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "The trades executed in the given time frame.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TradesResponse"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from the service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "trades": [
+                        {
+                          "id": "588",
+                          "symbol": "NEXO/USDT",
+                          "side": "buy",
+                          "tradeAmount": "100",
+                          "executedPrice": "2.05801152",
+                          "timestamp": 1622030078,
+                          "orderId": "3112015294862764_690693483"
+                        }
+                      ],
+                      "currentPage": 1,
+                      "pageSize": 100,
+                      "totalPages": 10,
+                      "totalElements": 965
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Invalid request field."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "No trades found for the requested pairs in the specified time frame.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-500": {
+                    "summary": "500 from the service directly",
+                    "description": "Service-500",
+                    "value": {
+                      "errorCode": 500,
+                      "errorMessage": "No trades found for the requested pairs in the specified time frame."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/transaction": {
+      "get": {
+        "tags": [
+          "History"
+        ],
+        "summary": "Retrieves transaction info",
+        "description": "Retrieves transaction info by its id",
+        "operationId": "getTransaction",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "transactionId",
+            "in": "query",
+            "description": "The id of the transaction to be fetched",
+            "required": true,
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transaction found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TransactionResponse"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from the service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "transactionId": 140871,
+                      "createDate": "2022-07-11T11:49:43.428+00:00",
+                      "assetName": "USDT",
+                      "amount": 30,
+                      "type": "deposit",
+                      "status": "success"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-403": {
+                    "summary": "403 from the service directly",
+                    "description": "Service-403",
+                    "value": {
+                      "errorCode": 403,
+                      "errorMessage": "No matching transaction found."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/history/deposit-and-withdrawals": {
+      "get": {
+        "tags": [
+          "History"
+        ],
+        "summary": "Retrieves deposits and withdrawals history",
+        "description": "Retrieves deposits and withdrawals from the platform",
+        "operationId": "getDepositsAndWithdrawals",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "description": "Milliseconds timestamp for beginning of search period.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "description": "Milliseconds timestamp for end of search period.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Page size of search result. Maximum accepted value is 50.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "pageNumber",
+            "in": "query",
+            "description": "Page number of search result",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          },
+          {
+            "name": "asset",
+            "in": "query",
+            "description": "Shortnames of assets to retrieve",
+            "required": false,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "description": "The type of the transactions",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "deposit",
+                "withdrawal"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Deposit and withdrawal history response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DepositWithdrawHistoryResponse"
+                },
+                "examples": {
+                  "Service-200": {
+                    "value": {
+                      "totalPages": 30,
+                      "pageSize": 2,
+                      "deals": [
+                        {
+                          "timestamp": 1674218642132,
+                          "asset": "XRP",
+                          "amount": "10.0000000000000000",
+                          "side": "DEPOSIT"
+                        },
+                        {
+                          "timestamp": 1674208210150,
+                          "asset": "NEXO",
+                          "amount": "1000.0000000000000000",
+                          "side": "DEPOSIT"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Type value is invalid": {
+                    "summary": "Value of field type is not valid",
+                    "description": "type-invalid",
+                    "value": {
+                      "errorCode": 102,
+                      "errorMessage": "type must be in either 'deposit' or 'withdrawal'"
+                    }
+                  },
+                  "End date is later than start date": {
+                    "summary": "Value of start date is not valid",
+                    "description": "startDate-invalid",
+                    "value": {
+                      "errorCode": 102,
+                      "errorMessage": "startDate must be earlier than endDate"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/active": {
+      "get": {
+        "tags": [
+          "History"
+        ],
+        "summary": "Retrieves open orders history",
+        "description": "Retrieves all open orders of a given user. Supports pagination for ease of use. \n \n Roles allowed: TRADER, VIEWER",
+        "operationId": "getOpenOrders",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pair",
+            "in": "query",
+            "description": "Filter orders by pair",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "pageSize",
+            "in": "query",
+            "description": "Page size of search result. Maximum accepted value is 50.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 10
+            }
+          },
+          {
+            "name": "pageNumber",
+            "in": "query",
+            "description": "Page number of search result.",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Open orders response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OpenOrdersResponse"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from the service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "totalOrders": 1,
+                      "orders": [
+                        {
+                          "orderId": "7703fa35-a041-47d7-8250-6aaf3a6e53c3",
+                          "timestamp": "2023-04-17T04:54:54.770+00:00",
+                          "pair": "XRP/USDT",
+                          "side": "buy",
+                          "type": "takeProfit",
+                          "price": 0,
+                          "filledAmount": 0,
+                          "orderAmount": 22,
+                          "filledSplits": 2,
+                          "totalSplits": 4,
+                          "triggerPrice": 10,
+                          "feeAmount": 0,
+                          "feeAsset": "NEXO",
+                          "status": "active"
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request field.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "Invalid request field."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "No orders found.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-500": {
+                    "summary": "500 from the service directly",
+                    "description": "Service-500",
+                    "value": {
+                      "errorCode": 500,
+                      "errorMessage": "No orders found."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/futures/instruments": {
+      "get": {
+        "tags": [
+          "Futures"
+        ],
+        "summary": "Retrieves futures instruments.",
+        "description": "Retrieves all currently available futures instruments along with their precisions. \n \n Roles allowed: TRADER, VIEWER",
+        "operationId": "getFuturesInstruments",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of available futures instruments.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FuturesInstrumentsResponse"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from the service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "instruments": [
+                        {
+                          "name": "BTCUSDT",
+                          "pricePrecision": 1,
+                          "amountPrecision": 3
+                        },
+                        {
+                          "name": "ETHUSDT",
+                          "pricePrecision": 2,
+                          "amountPrecision": 0
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/futures/positions": {
+      "get": {
+        "tags": [
+          "Futures"
+        ],
+        "summary": "Retrieves futures positions.",
+        "description": "Retrieves futures positions. \n \n Roles allowed: TRADER, VIEWER",
+        "operationId": "getFuturesPositions",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "The status of the desired positions. If not passed filter \"any\" is applied. (Case sensitive)",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "any",
+                "active",
+                "inactive"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of futures positions.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FuturesPositionsResponse"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from the service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "positions": [
+                        {
+                          "id": 1,
+                          "instrument": "BTCUSDT",
+                          "side": "long",
+                          "amount": 1,
+                          "entryPrice": 36000,
+                          "markPrice": 36000,
+                          "liquidationPrice": 18000,
+                          "unrealizedPnl": 0,
+                          "lockedCollateral": 36000,
+                          "collateralAsset": "USDT",
+                          "leverage": 1,
+                          "created": "2022-02-22T00:00:00.000+00:00",
+                          "updated": "2022-02-22T00:00:00.000+00:00",
+                          "isPositionActive": true
+                        },
+                        {
+                          "id": 1,
+                          "instrument": "ETHUSDT",
+                          "side": "long",
+                          "amount": 1,
+                          "entryPrice": 2500,
+                          "markPrice": 2500,
+                          "liquidationPrice": 1250,
+                          "unrealizedPnl": 0,
+                          "lockedCollateral": 2500,
+                          "collateralAsset": "USDT",
+                          "leverage": 1,
+                          "created": "2022-02-22T00:00:00.000+00:00",
+                          "updated": "2022-02-22T00:00:00.000+00:00",
+                          "isPositionActive": false
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/futures/order": {
+      "post": {
+        "tags": [
+          "Futures"
+        ],
+        "summary": "Places a futures order.",
+        "description": "Places a futures order and returns its id. \n \n Roles allowed: TRADER",
+        "operationId": "placeFuturesOrder",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlaceFuturesOrderRequest"
+              },
+              "example": {
+                "instrument": "BTCUSDT",
+                "positionAction": "open",
+                "positionSide": "long",
+                "type": "market",
+                "quantity": 0.01
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "102": {
+            "description": "Request param missing.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceFuturesOrderMissingParamResponse"
+                },
+                "examples": {
+                  "id": {
+                    "description": "id",
+                    "value": {
+                      "errorCode": 102,
+                      "errorMessage": "quantity param missing"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Order successfully placed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaceOrderResponse"
+                },
+                "examples": {
+                  "id": {
+                    "description": "id",
+                    "value": {
+                      "id": "1234567768_8989"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/future/close-all-positions": {
+      "post": {
+        "tags": [
+          "Futures"
+        ],
+        "summary": "Close all positions.",
+        "description": "Closes all active positions and returns positions to close count. \n \n Roles allowed: TRADER, VIEWER",
+        "operationId": "closeAllPositions",
+        "parameters": [
+          {
+            "name": "X-API-KEY",
+            "in": "header",
+            "description": "The user API-Key",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-NONCE",
+            "in": "header",
+            "description": "The millisecond timestamp of request creation.",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "X-SIGNATURE",
+            "in": "header",
+            "description": "The generated HMAC signature",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Positions to close successfully placed.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FuturesCloseAllPositionsResponse"
+                },
+                "examples": {
+                  "Service-200": {
+                    "summary": "200 from the service directly",
+                    "description": "Service-200",
+                    "value": {
+                      "positionsToCloseCount": 3
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                },
+                "examples": {
+                  "Service-400": {
+                    "summary": "400 from the service directly",
+                    "description": "Service-400",
+                    "value": {
+                      "errorCode": 400,
+                      "errorMessage": "No active positions to close."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PairsResponse": {
+        "type": "object",
+        "properties": {
+          "pairs": {
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "List of pairs"
+          },
+          "min_limits": {
+            "type": "object",
+            "description": "Map of asset and min limit."
+          },
+          "max_limits": {
+            "type": "object",
+            "description": "Map of asset and max limit."
+          }
+        }
+      },
+      "FeeTiersResponse": {
+        "type": "object",
+        "properties": {
+          "tradingTakerFeePercent": {
+            "type": "number",
+            "format": "double"
+          },
+          "tradingMakerFeePercent": {
+            "type": "number",
+            "format": "double"
+          },
+          "futuresTakerFeePercent": {
+            "type": "number",
+            "format": "double"
+          },
+          "futuresMakerFeePercent": {
+            "type": "number",
+            "format": "double"
+          },
+          "currentSpotVolumeTier": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number"
+              },
+              "amountFromUsd": {
+                "type": "number"
+              },
+              "amountToUsd": {
+                "type": "number"
+              }
+            }
+          },
+          "currentFuturesVolumeTier": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "number"
+              },
+              "amountFromUsd": {
+                "type": "number"
+              },
+              "amountToUsd": {
+                "type": "number"
+              }
+            }
+          },
+          "spot30DaysTradingVolume": {
+            "type": "number",
+            "format": "double"
+          },
+          "futures30DaysTradingVolume": {
+            "type": "object",
+            "format": "double"
+          },
+          "totalFeesPaid": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TotalFeesPaid"
+            }
+          }
+        }
+      },
+      "TotalFeesPaid": {
+        "type": "object",
+        "properties": {
+          "assetName": {
+            "type": "string"
+          },
+          "amountTotalFee": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "Quote": {
+        "type": "object",
+        "properties": {
+          "pair": {
+            "type": "string",
+            "description": "The pair of the quote"
+          },
+          "amount": {
+            "type": "string",
+            "description": "The amount of the quote."
+          },
+          "price": {
+            "type": "string",
+            "description": "The price of the quote."
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "The timestamp of quote in UTC."
+          }
+        }
+      },
+      "PlaceOrderRequest": {
+        "required": [
+          "side",
+          "pair",
+          "type",
+          "quantity"
+        ],
+        "type": "object",
+        "properties": {
+          "pair": {
+            "pattern": "[A-Z]{2,4}/[A-Z]{2,4}",
+            "type": "string"
+          },
+          "side": {
+            "pattern": "buy|sell",
+            "type": "string",
+            "description": "The side for the order buy or sell. (Case sensitive)",
+            "enum": [
+              "buy",
+              "sell"
+            ]
+          },
+          "type": {
+            "pattern": "market|limit",
+            "type": "string",
+            "enum": [
+              "market",
+              "limit"
+            ]
+          },
+          "quantity": {
+            "type": "number",
+            "format": "double"
+          },
+          "price": {
+            "type": "number",
+            "format": "double",
+            "description": "Only for limit orders."
+          }
+        }
+      },
+      "FuturesCloseAllPositionsResponse": {
+        "type": "object",
+        "properties": {
+          "positionsToCloseCount": {
+            "type": "integer"
+          }
+        }
+      },
+      "PlaceOrderResponse": {
+        "type": "object",
+        "properties": {
+          "dealId": {
+            "type": "string"
+          }
+        }
+      },
+      "PlaceTriggerOrderRequest": {
+        "required": [
+          "side",
+          "pair",
+          "triggerType",
+          "triggerPrice",
+          "amount"
+        ],
+        "type": "object",
+        "properties": {
+          "pair": {
+            "pattern": "[A-Z]{2,4}/[A-Z]{2,4}",
+            "type": "string"
+          },
+          "side": {
+            "pattern": "buy|sell",
+            "type": "string",
+            "description": "The side for the order buy or sell. (Case sensitive)",
+            "enum": [
+              "buy",
+              "sell"
+            ]
+          },
+          "triggerType": {
+            "pattern": "stopLoss|takeProfit|trailing",
+            "type": "string",
+            "enum": [
+              "stopLoss",
+              "takeProfit",
+              "trailing"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "triggerPrice": {
+            "type": "number",
+            "format": "double"
+          },
+          "trailingDistance": {
+            "type": "number",
+            "format": "double"
+          },
+          "trailingPercentage": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "PlaceTriggerOrderResponse": {
+        "type": "object",
+        "properties": {
+          "dealId": {
+            "type": "string"
+          }
+        }
+      },
+      "CancellOrderRequest": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string"
+          }
+        }
+      },
+      "CancelAllOrdersRequest": {
+        "type": "object",
+        "properties": {
+          "pair": {
+            "type": "string"
+          }
+        }
+      },
+      "PlaceAdvancedOrderRequest": {
+        "required": [
+          "side",
+          "pair",
+          "stopLossPrice",
+          "takeProfitPrice",
+          "amount"
+        ],
+        "type": "object",
+        "properties": {
+          "pair": {
+            "pattern": "[A-Z]{2,4}/[A-Z]{2,4}",
+            "type": "string"
+          },
+          "side": {
+            "pattern": "buy|sell",
+            "type": "string",
+            "description": "The side for the order buy or sell. (Case sensitive)",
+            "enum": [
+              "buy",
+              "sell"
+            ]
+          },
+          "amount": {
+            "type": "number",
+            "format": "string"
+          },
+          "stopLossPrice": {
+            "type": "number",
+            "format": "string"
+          },
+          "takeProfitPrice": {
+            "type": "number",
+            "format": "string"
+          }
+        }
+      },
+      "PlaceAdvancedOrderResponse": {
+        "type": "object",
+        "properties": {
+          "dealId": {
+            "type": "string"
+          }
+        }
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "properties": {
+          "errorCode": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "errorMessage": {
+            "type": "string"
+          }
+        }
+      },
+      "BalancesResponse": {
+        "type": "object",
+        "properties": {
+          "balances": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WalletBalance"
+            }
+          }
+        }
+      },
+      "PlatformTransferRequest": {
+        "required": [
+          "asset",
+          "amount"
+        ],
+        "type": "object",
+        "properties": {
+          "asset": {
+            "pattern": "[A-Z]{2,4}",
+            "type": "string",
+            "description": "The asset to be moved. (Case sensitive)"
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "PlatformBalancesResponse": {
+        "type": "object",
+        "properties": {
+          "balances": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlatformBalance"
+            }
+          }
+        }
+      },
+      "TransactionResponse": {
+        "type": "object",
+        "properties": {
+          "transactionId": {
+            "type": "string",
+            "description": "Transaction reference number."
+          },
+          "createDate": {
+            "type": "string",
+            "description": "Transaction execution date."
+          },
+          "assetName": {
+            "type": "string",
+            "description": "Asset short name."
+          },
+          "amount": {
+            "type": "number",
+            "description": "Asset amount."
+          },
+          "type": {
+            "type": "string",
+            "description": "Transaction type."
+          },
+          "status": {
+            "type": "string",
+            "description": "Transaction status."
+          }
+        }
+      },
+      "DepositWithdrawHistoryResponse": {
+        "type": "object",
+        "properties": {
+          "totalPages": {
+            "type": "number",
+            "description": "The total number of pages."
+          },
+          "pageSize": {
+            "type": "number",
+            "description": "The page size"
+          },
+          "deals": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/HistoricalDepositWithdraw"
+            }
+          }
+        }
+      },
+      "HistoricalDepositWithdraw": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "number",
+            "description": "The timestamp of the transaction."
+          },
+          "asset": {
+            "type": "string",
+            "description": "The asset shortname transferred"
+          },
+          "amount": {
+            "type": "string",
+            "description": "The amount transferred"
+          },
+          "side": {
+            "pattern": "DEPOSIT|WITHDRAW",
+            "type": "string",
+            "description": "The side of the transaction",
+            "enum": [
+              "DEPOSIT",
+              "WITHDRAW"
+            ]
+          }
+        }
+      },
+      "PlatformTransferResponse": {
+        "type": "object",
+        "properties": {
+          "transactionId": {
+            "type": "string"
+          }
+        }
+      },
+      "WalletBalance": {
+        "type": "object",
+        "properties": {
+          "assetName": {
+            "type": "string",
+            "description": "Asset short name."
+          },
+          "totalBalance": {
+            "type": "string",
+            "description": "Total balance amount."
+          },
+          "availableBalance": {
+            "type": "string",
+            "description": "Amount available for trading."
+          },
+          "lockedBalance": {
+            "type": "string",
+            "description": "Amount locked in futures, limit orders and etc."
+          },
+          "interest": {
+            "type": "string",
+            "description": "Amount of interest."
+          },
+          "debt": {
+            "type": "string",
+            "description": "Amount of debt."
+          },
+          "lastUpdated": {
+            "type": "string",
+            "description": "Timestamp of the last balance operation."
+          }
+        }
+      },
+      "WalletBalance_V2": {
+        "type": "object",
+        "properties": {
+          "assetName": {
+            "type": "string",
+            "description": "Traded asset short name."
+          },
+          "total": {
+            "type": "string",
+            "description": "Total balance amount."
+          },
+          "available": {
+            "type": "string",
+            "description": "Balance available for trading."
+          },
+          "lockedLimits": {
+            "type": "string",
+            "description": "Amount locked in limit orders."
+          },
+          "lockedFuturePositions": {
+            "type": "string",
+            "description": "Amount locked in future orders."
+          },
+          "interest": {
+            "type": "string",
+            "description": "Interest amount."
+          },
+          "debt": {
+            "type": "string",
+            "description": "Total debt amount"
+          },
+          "unrealizedPnl": {
+            "type": "string",
+            "description": "Unrealized penalty amount."
+          },
+          "lastUpdated": {
+            "type": "string",
+            "description": "Date of the last balance operation."
+          }
+        }
+      },
+      "PlatformBalance": {
+        "type": "object",
+        "properties": {
+          "assetName": {
+            "type": "string"
+          },
+          "availableBalance": {
+            "type": "string"
+          }
+        }
+      },
+      "OrderHistoryResponse": {
+        "type": "object",
+        "properties": {
+          "orders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Order"
+            }
+          }
+        }
+      },
+      "Order": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The order ID in the form \"\\<number\\>_\\<number\\>\""
+          },
+          "side": {
+            "type": "string",
+            "description": "Buy or sell."
+          },
+          "pair": {
+            "type": "string",
+            "description": "The executed trading pair."
+          },
+          "timestamp": {
+            "type": "number",
+            "description": "The timestamp of creation."
+          },
+          "quantity": {
+            "type": "string",
+            "description": "The executed amount."
+          },
+          "exchangeRate": {
+            "type": "string",
+            "description": "The average execution price."
+          },
+          "executedQuantity": {
+            "type": "string",
+            "description": "The executed amount."
+          },
+          "fees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Fee"
+            }
+          }
+        }
+      },
+      "TradesResponse": {
+        "type": "object",
+        "properties": {
+          "trades": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Trade"
+            }
+          },
+          "currentPage": {
+            "type": "number",
+            "description": "Current page."
+          },
+          "pageSize": {
+            "type": "number",
+            "description": "Page size of request."
+          },
+          "totalPages": {
+            "type": "number",
+            "description": "Total pages."
+          },
+          "totalElements": {
+            "type": "number",
+            "description": "Total elements."
+          }
+        }
+      },
+      "Trade": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The trade id."
+          },
+          "symbol": {
+            "type": "string",
+            "description": "The trade symbol."
+          },
+          "side": {
+            "type": "string",
+            "description": "The trade side."
+          },
+          "tradeAmount": {
+            "type": "string",
+            "description": "The trade amount."
+          },
+          "executedPrice": {
+            "type": "string",
+            "description": "The average executed trade price."
+          },
+          "timestamp": {
+            "type": "number",
+            "description": "The trade match timestamp."
+          },
+          "orderId": {
+            "type": "string",
+            "description": "The parent order id."
+          },
+          "tradeFee": {
+            "type": "string",
+            "description": "Trade fee amount."
+          },
+          "tradeAsset": {
+            "type": "string",
+            "description": "Trade fee asset."
+          }
+        }
+      },
+      "OpenOrdersResponse": {
+        "type": "object",
+        "properties": {
+          "totalOrders": {
+            "type": "number",
+            "description": "Total orders count."
+          },
+          "orders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OpenOrders"
+            }
+          }
+        }
+      },
+      "OpenOrders": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "description": "The order id."
+          },
+          "timestamp": {
+            "type": "string",
+            "description": "Timestamp."
+          },
+          "pair": {
+            "type": "string",
+            "description": "The order pair."
+          },
+          "side": {
+            "type": "string",
+            "description": "The order side."
+          },
+          "price": {
+            "type": "number",
+            "description": "The order price."
+          },
+          "filledAmount": {
+            "type": "number",
+            "description": "The order filled amount."
+          },
+          "orderAmount": {
+            "type": "number",
+            "description": "The order amount."
+          },
+          "filledSplits": {
+            "type": "number",
+            "description": "The order filled splits."
+          },
+          "totalSplits": {
+            "type": "number",
+            "description": "The order total splits."
+          },
+          "triggerPrice": {
+            "type": "number",
+            "description": "The order trigger price."
+          },
+          "feeAmount": {
+            "type": "number",
+            "description": "The order fee amount."
+          },
+          "feeAsset": {
+            "type": "string",
+            "description": "The order fee asset."
+          },
+          "status": {
+            "type": "string",
+            "description": "The order status."
+          }
+        }
+      },
+      "TradeForOrderV1": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The trade id."
+          },
+          "symbol": {
+            "type": "string",
+            "description": "The trade symbol."
+          },
+          "type": {
+            "type": "string",
+            "description": "Type of trade."
+          },
+          "orderAmount": {
+            "type": "string",
+            "description": "The trade amount."
+          },
+          "amountFilled": {
+            "type": "string",
+            "description": "The executed amount."
+          },
+          "executedPrice": {
+            "type": "string",
+            "description": "The average executed trade price."
+          },
+          "timestamp": {
+            "type": "number",
+            "description": "The trade match timestamp."
+          },
+          "status": {
+            "type": "string",
+            "description": "The status of trade.(active/cancelled/partially_filled/completed)"
+          }
+        }
+      },
+      "TradeForOrderV2": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The trade id."
+          },
+          "symbol": {
+            "type": "string",
+            "description": "The trade symbol."
+          },
+          "type": {
+            "type": "string",
+            "description": "Type of trade."
+          },
+          "orderAmount": {
+            "type": "string",
+            "description": "The trade amount."
+          },
+          "amountFilled": {
+            "type": "string",
+            "description": "The executed amount."
+          },
+          "executedPrice": {
+            "type": "string",
+            "description": "The average executed trade price."
+          },
+          "timestamp": {
+            "type": "number",
+            "description": "The trade match timestamp."
+          },
+          "status": {
+            "type": "string",
+            "description": "The status of trade.(active/cancelled/partially_filled/filled)"
+          }
+        }
+      },
+      "TradeForOrderV3": {
+        "type": "object",
+        "properties": {
+          "tradeId": {
+            "type": "string",
+            "description": "The trade id."
+          },
+          "symbol": {
+            "type": "string",
+            "description": "The trade symbol."
+          },
+          "type": {
+            "type": "string",
+            "description": "Type of trade."
+          },
+          "orderAmount": {
+            "type": "string",
+            "description": "The trade amount."
+          },
+          "amountFilled": {
+            "type": "string",
+            "description": "The executed amount."
+          },
+          "executedPrice": {
+            "type": "string",
+            "description": "The average executed trade price."
+          },
+          "timestamp": {
+            "type": "number",
+            "description": "The trade match timestamp."
+          },
+          "status": {
+            "type": "string",
+            "description": "The status of trade.(active/cancelled/partially_filled/filled)"
+          }
+        }
+      },
+      "OrderDetailsResponse": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The order id."
+          },
+          "side": {
+            "type": "string",
+            "description": "The order side."
+          },
+          "pair": {
+            "type": "string",
+            "description": "The order symbol."
+          },
+          "timestamp": {
+            "type": "number",
+            "description": "The order creation timestamp."
+          },
+          "quantity": {
+            "type": "string",
+            "description": "The order amount."
+          },
+          "exchangeRate": {
+            "type": "string",
+            "description": "The order price."
+          },
+          "executedQuantity": {
+            "type": "string",
+            "description": "The executed amount."
+          },
+          "trades": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TradeForOrderV1"
+            }
+          }
+        }
+      },
+      "OrderDetailsV2Response": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The order id."
+          },
+          "side": {
+            "type": "string",
+            "description": "The order side."
+          },
+          "pair": {
+            "type": "string",
+            "description": "The order symbol."
+          },
+          "timestamp": {
+            "type": "number",
+            "description": "The order creation timestamp."
+          },
+          "quantity": {
+            "type": "string",
+            "description": "The order amount."
+          },
+          "exchangeRate": {
+            "type": "string",
+            "description": "The order price."
+          },
+          "triggerPrice": {
+            "type": "string",
+            "description": "Trigger price of the deal."
+          },
+          "trailingDistance": {
+            "type": "string",
+            "description": "Trailing distance of the deal. "
+          },
+          "trailingPercentage": {
+            "type": "string",
+            "description": "Trigger percentage of the deal."
+          },
+          "type": {
+            "type": "string",
+            "description": "The type og the deal. (market/limit/trigger)"
+          },
+          "executedQuantity": {
+            "type": "string",
+            "description": "The executed amount."
+          },
+          "status": {
+            "type": "string",
+            "description": "The status of the deal.(active/completed/cancelled/triggered/partially_filled/failed)"
+          },
+          "trades": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TradeForOrderV2"
+            }
+          },
+          "filledSplits": {
+            "type": "integer"
+          },
+          "totalSplits": {
+            "type": "integer"
+          },
+          "primeFeeAmount": {
+            "type": "string"
+          },
+          "primeFeeAsset": {
+            "type": "string"
+          }
+        }
+      },
+      "OrderDetailsV3Response": {
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "description": "The order id."
+          },
+          "side": {
+            "type": "string",
+            "description": "The order side."
+          },
+          "pair": {
+            "type": "string",
+            "description": "The order symbol."
+          },
+          "timestamp": {
+            "type": "number",
+            "description": "The order creation timestamp."
+          },
+          "quantity": {
+            "type": "string",
+            "description": "The order amount."
+          },
+          "price": {
+            "type": "string",
+            "description": "The order price."
+          },
+          "triggerPrice": {
+            "type": "string",
+            "description": "Trigger price of the deal."
+          },
+          "trailingDistance": {
+            "type": "string",
+            "description": "Trailing distance of the deal. "
+          },
+          "trailingPercentage": {
+            "type": "string",
+            "description": "Trigger percentage of the deal."
+          },
+          "type": {
+            "type": "string",
+            "description": "The type og the deal. (market/limit/trigger)"
+          },
+          "executedQuantity": {
+            "type": "string",
+            "description": "The executed amount."
+          },
+          "status": {
+            "type": "string",
+            "description": "The status of the deal.(active/completed/cancelled/partially_filled/failed)"
+          },
+          "tradeFee": {
+            "type": "number",
+            "description": "The fee for trading",
+            "deprecated": true
+          },
+          "feeAsset": {
+            "type": "string",
+            "description": "The asset of the trading fee",
+            "deprecated": true
+          },
+          "filledSplits": {
+            "type": "number",
+            "description": "The number of filled TWAP splits."
+          },
+          "totalSplits": {
+            "type": "string",
+            "description": "The number of total TWAP splits."
+          },
+          "timeInForce": {
+            "type": "string",
+            "description": "The type of limit order.(gtc,ioc,fok)"
+          },
+          "trades": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TradeForOrderV3"
+            }
+          },
+          "fees": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Fee"
+            }
+          }
+        }
+      },
+      "Fee": {
+        "type": "object",
+        "properties": {
+          "asset": {
+            "type": "string",
+            "description": "Asset short name"
+          },
+          "amount": {
+            "type": "string",
+            "description": "Fee amount in string format"
+          }
+        }
+      },
+      "TwapOrderRequest": {
+        "type": "object",
+        "properties": {
+          "pair": {
+            "pattern": "[A-Z]{2,6}/[A-Z]{2,6}",
+            "type": "string",
+            "required": true,
+            "description": "Pair symbol."
+          },
+          "side": {
+            "pattern": "buy|sell",
+            "type": "string",
+            "description": "Side of the deal.",
+            "required": true
+          },
+          "quantity": {
+            "type": "number",
+            "format": "double",
+            "description": "Amount to execute.",
+            "required": true
+          },
+          "exchanges": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "List of exchanges, against which to execute the deal.",
+            "required": false
+          },
+          "splits": {
+            "type": "integer",
+            "description": "The number of the trades to split the TWAP to.",
+            "required": false
+          },
+          "executionInterval": {
+            "type": "integer",
+            "description": "Execution interval in seconds. Accepts 10, 20 or 30.",
+            "required": false
+          },
+          "twapDurationHours": {
+            "type": "integer",
+            "description": "TWAP hours duration.",
+            "minimum": 0,
+            "maximum": 48,
+            "required": false
+          },
+          "twapDurationMinutes": {
+            "type": "integer",
+            "description": "TWAP minutes duration. Should be used in combination with twapDurationHours.",
+            "minimum": 0,
+            "maximum": 59,
+            "required": false
+          }
+        }
+      },
+      "OrderMetadataResponse": {
+        "type": "object",
+        "properties": {
+          "orderMetadata": {
+            "properties": {
+              "pair": {
+                "type": "string"
+              },
+              "minOrderSize": {
+                "type": "string"
+              },
+              "maxOrderSize": {
+                "type": "string"
+              },
+              "currentPrice": {
+                "type": "string"
+              },
+              "amountPrecision": {
+                "type": "string"
+              },
+              "pricePrecision": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "TwapOrderResponse": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "dealId": {
+            "type": "integer"
+          }
+        }
+      },
+      "FuturesPositionsResponse": {
+        "type": "object",
+        "properties": {
+          "positions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FuturesPosition"
+            },
+            "description": "List of future positions"
+          }
+        }
+      },
+      "FuturesPosition": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The position id."
+          },
+          "instrument": {
+            "type": "string",
+            "description": "The position instrument."
+          },
+          "side": {
+            "type": "string",
+            "description": "The position side."
+          },
+          "amount": {
+            "type": "number",
+            "description": "The position amount."
+          },
+          "entryPrice": {
+            "type": "number",
+            "description": "The position entry price."
+          },
+          "markPrice": {
+            "type": "number",
+            "description": "The position mark price."
+          },
+          "liquidationPrice": {
+            "type": "number",
+            "description": "The position liquidation price."
+          },
+          "unrealizedPnl": {
+            "type": "number",
+            "description": "The position unrealized pnl."
+          },
+          "lockedCollateral": {
+            "type": "number",
+            "description": "The position locked collateral."
+          },
+          "collateralAsset": {
+            "type": "string",
+            "description": "The position collateral asset."
+          },
+          "leverage": {
+            "type": "number",
+            "description": "The position leverage."
+          },
+          "created": {
+            "type": "string",
+            "description": "The position creation date."
+          },
+          "updated": {
+            "type": "string",
+            "description": "The position last update date."
+          },
+          "isPositionActive": {
+            "type": "boolean",
+            "description": "Is the position active."
+          }
+        }
+      },
+      "FuturesInstrumentsResponse": {
+        "type": "object",
+        "properties": {
+          "instruments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FuturesInstrument"
+            },
+            "description": "List of available futures instruments"
+          }
+        }
+      },
+      "FuturesInstrument": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "The instrument name."
+          },
+          "pricePrecision": {
+            "type": "number",
+            "description": "The instrument price precision."
+          },
+          "amountPrecision": {
+            "type": "number",
+            "description": "The instrument amount precision."
+          }
+        }
+      },
+      "PlaceFuturesOrderRequest": {
+        "required": [
+          "instrument",
+          "positionAction",
+          "positionSide",
+          "type",
+          "quantity"
+        ],
+        "type": "object",
+        "properties": {
+          "instrument": {
+            "type": "string",
+            "description": "The order instrument."
+          },
+          "positionAction": {
+            "pattern": "open|close",
+            "type": "string",
+            "description": "The position action - open or close. (Case sensitive)",
+            "enum": [
+              "open",
+              "close"
+            ]
+          },
+          "positionSide": {
+            "pattern": "long|short",
+            "type": "string",
+            "description": "The side for the order - long or short. (Case sensitive)",
+            "enum": [
+              "long",
+              "short"
+            ]
+          },
+          "type": {
+            "pattern": "market",
+            "type": "string",
+            "description": "The order type - market. (Case sensitive)",
+            "enum": [
+              "market"
+            ]
+          },
+          "quantity": {
+            "type": "number",
+            "format": "double",
+            "description": "The size of the order."
+          }
+        }
+      },
+      "PlaceFuturesOrderMissingParamResponse": {
+        "type": "object",
+        "properties": {
+          "errorCode": {
+            "type": "integer",
+            "description": "The missing param"
+          },
+          "errorMessage": {
+            "type": "string",
+            "description": "Human-readable error message explaining which is the missing param."
+          }
+        }
+      }
+    }
+  }
+}

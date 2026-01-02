@@ -1,0 +1,447 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Nexo Payment Gateway",
+    "termsOfService": "https://nexo.com/it/terms",
+    "license": {
+      "name": "Corporate",
+      "url": "https://nexo.com"
+    },
+    "version": "1.0.0",
+    "x-logo": {
+      "altText": "Nexo Logo",
+      "url": "./releases/static/logo.png"
+    },
+    "description": "# Introduction\nWelcome to the Nexo Payment Gateway API documentation. This API is designed specifically for merchants who have been successfully onboarded onto the Nexo platform.\nTo begin the onboarding process or to access more information, please visit [**Nexo Onboarding**](https://nexo.com/).\n\nThe Nexo Payment Gateway API adheres to RESTful principles, ensuring a seamless integration experience.\nOur API provides predictable, resource-oriented URLs, supports form-encoded request bodies, and returns JSON-encoded responses.\nIt employs standard HTTP response codes, authentication methods, and verbs to facilitate clear and reliable communication between your services and our platform.\n\n# Authentication\n\n## Overview\n\nSecure authentication is crucial for protecting your data. In the Nexo Payment Gateway API, authentication is handled using an API key.\n**This API key must be included in the header of every request to ensure that the interaction is authorized.**\n\n<SecurityDefinitions />\n\n## API Key Usage\n\nTo authenticate API requests, include your API key in the `x-api-key` header.\nThis header is required for all API calls to verify that the requestor has proper authorization.\nFailure to include the API key, or using an incorrect or revoked key, will result in a denial of access.\n\n# Sandbox Environment\nCurrently, the Nexo Payment Gateway API does not provide support for a sandbox or test environment.\nThis means that all API calls made will be executed in the live production environment.\n\nWe recognize the importance of testing functionalities in a controlled setting without affecting real transactions or data.\nPlans to introduce a sandbox environment are under consideration, and we will inform all integrated partners once it becomes available.\n\n## Implications\n- **Testing Limitations**: Absence of a sandbox environment requires any tests to be conducted directly in the production environment, which may impact live data and operations.\n- **Risk Management**: Developers must take extra precautions to handle data and transactions sensitively to avoid unintended consequences during testing.\n\n## Recommendations for Safe Testing in Production\n- **Minimize Transaction Volumes**: Use minimal transaction amounts when testing payment - processing capabilities to reduce potential risk and impact.\n- **Monitor Closely**: Keep a tight watch on the system for any unexpected behaviors during testing phases.\n- **Clear Communication**: Coordinate with the Nexo Client Care team during planned testing to ensure any potential issues can be managed promptly.\n\n## Moving Forward\nWe understand the critical role a sandbox environment plays in effective API integration and are committed to enhancing the experience of our merchant clients. Thank you for your patience, updates will be provided as soon as they are available.\n\n# Communication\n## Security Protocol\nTo ensure the security and integrity of data, all requests to the Nexo Payment Gateway API must be sent over **HTTPS**. This protocol encrypts the data exchanged between the client and the server, providing a secure channel to prevent interception and unauthorized access during transmission.\n\n## Virtual Private Cloud (VPC) Tunnelling\nCurrently, the Nexo API does **not** support Virtual Private Cloud (VPC) tunnelling. If VPC tunnelling is an essential feature for your integration, we encourage you to reach out to our technical support team. We are always looking to evolve our services in ways that best meet the needs of our merchants, and your feedback is invaluable in guiding our feature updates.\n\n# Networks & Assets\nCurrently Nexo supports the following list of networks and associated assets for the Payment Gateway, with more planned to be added in the future.\n\n|Network|Description|Assets|\n|----|----|----|\n|bitcoin| This is the network of Bitcoin. | BTC\n|ethereum| This is the mainnet network of Ethereum. | ETH, PAXG, USDT, USDC, AAVE\n|polygon| This is the mainnet network of Polygon. | POL, ETH, USDT, USDC, AAVE\n|bsc| This is the mainnet network of Binance Smart Chain. | BNB\n# WebHooks\n\n## Overview\nThe Nexo Payment Gateway provides notifications via WebHooks. This feature allows merchants to receive updates about deposits and other significant events directly through HTTPS callbacks, facilitating an automated and efficient response system.\n\n## Configuration\nThe callback URL for the WebHooks must be configured through the Payment Gateway dashboard, available at [**Nexo Onboarding**](https://nexo.com/).\nThis URL, which is specified during the onboarding process, can be updated at any time as needed:\n\n- **HTTPS Requirement**: Only HTTPS URLs are accepted to ensure secure data transmission.\n- **Response Requirements**: The endpoint must respond with an HTTP status code in the range of 200-299 to signify successful receipt of the WebHook.\n- **Response Time**: The endpoint must send a response within 10 seconds of receiving the WebHook to avoid timeouts and ensure timely processing.\n\n\n## WebHook Structure\nBelow is the structure of the data that Nexo sends to the configured WebHook URL, encapsulated in two primary components - the event type and the data payload.\n\n### Event Structure\n|Property|Type|Description|\n|----|----|----------------|\n|*eventType*|string|Specifies the type of WebHook event. For more information, see WebHook Types.|\n|*data*|object|Contains the payload of the WebHook, detailed in the WebHookPayload structure.|\n\n### WebHook Payload Structure\n\n|Property|Type|Description|\n|----|----|----------------|\n|*transactionId*|string|Unique identifier of the transaction within Nexo's system.|\n|*transactionHash*|string|Blockchain-specific hash associated with the transaction, if applicable.|\n|*referenceId*|string|Unique identifier associated with the address involved in the transaction.|\n|*depositAddress*|string|Blockchain address targeted by the deposit operation.|\n|*asset*|string|Identifier representing the type of asset transferred, e.g \"ETH\".|\n|*amount*|string|Amount of the asset transferred, presented with a comma separated value - e.g. “0.2365” ETH.|\n|*timestamp*|string|Timestamp of when the deposit was detected by Nexo represented in ISO format (UTC).|\n|*fiat*|object|The fiat information of the transaction.|\n| &nbsp;&nbsp;&nbsp;&nbsp; *usd*|object|The fiat information for the said currency.|\n| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; *value*|string|The calculated value of the transaction in said currency. - “27.76630856” USD|\n| &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; *course*|string|The course at the time of the transaction. - “13.88315428” ETH/USD|\n\n\n\n### Example\n\n```json\n{\n  \"eventType\": \"PG_DEPOSIT\",\n  \"data\": {\n    \"transactionId\": \"bfd5f586-a706-4d26-8ca1-ea91dbecea2b\",\n    \"transactionHash\": \"0x02fc56662f353ebc4300d21690464e0e8afb77edc2329124b9f8b7e341f43896\",\n    \"referenceId\": \"6bf84342-606b-42c4-a3af-d738002e7f18\",\n    \"depositAddress\": \"0xdac17f958d2ee523a2206206994597c13d831ec7\",\n    \"asset\": \"ETH\",\n    \"amount\": \"0.00042142\",\n    \"timestamp\": \"2020-07-28T13:53:24.674Z\",\n    \"fiat\": {\n      \"usd\": {\n        \"value\": \"27.76630856\",\n        \"course\": \"13.88315428\"\n      }\n    }\n  }\n}\n```\n\n## WebHook Types\n\n|Type|Description|\n|----|----------------|\n|*PG_DEPOSIT*|A deposit of assets has been done to an address which belongs to the merchant.|\n\n## WebHook Integrity\n\n### Overview\nTo ensure the integrity and security of WebHook events, Nexo incorporates an `X-SIGNATURE` header with every event.\nThis cryptographic signature allows you, as the merchant, to verify that the event has not been altered or tampered with during transmission.\n\nIn addition each signature is considered unique, meaning that it also achieves idempotency for the webhook. In cases that you require data to be consumed additional times, you can rely on the signature as a resolution to duplication of events.\n### Signature Verification Process\nThe integrity verification is performed by recalculating the SHA256 hash of the event using a Shared Secret, which is a unique key generated for each merchant upon onboarding. This process ensures that the event you receive is exactly what was sent by Nexo without any alterations.\n\n### Steps for Verifying WebHook Integrity\n1. **Retrieve the Event**: Capture the incoming WebHook event and parse it into a structured type. For instance, in JavaScript, you might convert it into an object or class instance.\n```javascript\nclass Event {\n  constructor({ eventType, data }) {\n    this.eventType = eventType;\n    this.data = new Transaction(data);\n  }\n}\n\nclass Transaction {\n  constructor({\n    transactionId,\n    transactionHash,\n    referenceId,\n    depositAddress,\n    asset,\n    amount,\n    timestamp,\n    fiat\n  }) {\n    this.transactionId = transactionId;\n    this.transactionHash = transactionHash;\n    this.referenceId = referenceId;\n    this.depositAddress = depositAddress;\n    this.asset = asset;\n    this.amount = amount;\n    this.timestamp = timestamp;\n    this.fiat = new Fiat(fiat);\n  }\n}\nclass Fiat {\n  constructor({ usd }) {\n    this.usd = new FiatValue(usd);\n  }\n}\nclass FiatValue {\n  constructor({ value, course }) {\n    this.value = value;\n    this.course = course;\n  }\n}\n\nconst raw = {\n  eventType: \"PG_DEPOSIT\",\n  data: {\n    transactionId: \"NXT7Z2qAw4SFZpQaOyjZjak9B\",\n    transactionHash:\n      \"0x02fc56662f353ebc4300d21690464e0e8afb77edc2329124b9f8b7e341f43896\",\n    depositAddress: \"0xdac17f958d2ee523a2206206994597c13d831ec7\",\n    referenceId: \"6bf84342-606b-42c4-a3af-d738002e7f18\",\n    amount: \"0.00042142\",\n    asset: \"ETH\",\n    timestamp: \"2020-07-28T13:53:24.674Z\",\n    fiat: {\n      usd: {\n        value: \"27.76630856\",\n        course: \"13.88315428\"\n      }\n    }\n  },\n};\n\nconst event = new Event(raw);\n```\n\n2. **Obtain the Shared Secret**: Access your Shared Secret from the Nexo Payment Gateway dashboard. This secret is crucial for the hash calculation.\n```javascript\nconst secret = \"YourSharedSecretFromNexo\";\n```\n3. **Concatenate the Event and Shared Secret**: Convert the parsed event back to a string, append a delimiter (typically a forward slash “/”), and then append the Shared Secret.\n```javascript\nconst data = `${JSON.stringify(event)}/${secret}`;\n```\n4. **Compute the SHA256 Hash**: Apply a SHA256 hashing algorithm to the concatenated string from the previous step. Ensure that the hashing implementation is secure and follows cryptographic standards.\n```javascript const crypto = require('crypto'); ...\nconst computedSignature = `0x${crypto\n    .createHash(\"sha256\")\n    .update(data)\n    .digest(\"hex\")}`;\n\n```\n5. **Compare the Signatures**: Extract the `X-SIGNATURE`` from the headers of the received event and compare it against your locally computed signature.\n\n```javascript\nlet receivedSignature = receivedHeaders[\"X-SIGNATURE\"];\nif (receivedSignature === computedSignature) {\n    console.log(\"Signature verified successfully.\");\n} else {\n    console.log(\"Warning: Signature mismatch detected!\");\n}\n```\n\n### Java Example\n\nDefine an Event class that holds the structure of the event.\n```java\npackage org.example;\n\nimport lombok.Getter;\nimport lombok.Setter;\n\n@Getter\n@Setter\npublic class Event {\n    private String eventType;\n    private Transaction data;\n\n    public Event(String eventType, Transaction data) {\n        this.eventType = eventType;\n        this.data = data;\n    }\n}\n```\n\n  Define a CurrencyData class that holds the fiat currency data of the event.\n\n\n```java\npackage org.example;\nimport lombok.Getter;\nimport lombok.Setter;\n\n@Getter\n@Setter\npublic class CurrencyData {\n    private String value;\n    private String course;\n\n    public CurrencyData(String value, String course) {\n        this.value = value;\n        this.course = course;\n    }\n}\n```\n\nDefine a FiatData class that holds the fiat currency.\n\n```java\npackage org.example;\nimport lombok.Getter;\nimport lombok.Setter;\n\n@Getter\n@Setter\npublic class FiatData {\n    private CurrencyData usd;\n\n    public FiatData(CurrencyData usd) {\n        this.usd = usd;\n    }\n}\n```\nDefine a Transaction class that holds the payload of the event.\n\n```java\npackage org.example;\n\nimport lombok.Getter;\nimport lombok.Setter;\nimport java.util.Map;\n\n@Getter\n@Setter\npublic class Transaction {\n    private String transactionId;\n    private String transactionHash;\n    private String referenceId;\n    private String depositAddress;\n    private String asset;\n    private String amount;\n    private String timestamp;\n    private FiatData fiat;\n\n\n    public Transaction(String transactionId, String transactionHash, String referenceId,\n                      String depositAddress, String asset, String amount, String timestamp, FiatData fiat) {\n        this.transactionId = transactionId;\n        this.transactionHash = transactionHash;\n        this.referenceId = referenceId;\n        this.depositAddress = depositAddress;\n        this.asset = asset;\n        this.amount = amount;\n        this.timestamp = timestamp;\n        this.fiat = fiat;\n    }\n}\n```\nSignature creation.\n```java\npackage org.example;\n\nimport java.nio.charset.StandardCharsets;\nimport java.security.MessageDigest;\nimport java.security.NoSuchAlgorithmException;\nimport java.util.HexFormat;\nimport com.fasterxml.jackson.core.JsonProcessingException;\nimport com.fasterxml.jackson.databind.ObjectMapper;\n\npublic class Main {\n    public static void main(String[] args) {\n\n        CurrencyData usdCurrencyData = new CurrencyData(\"27.76630856\", \"13.88315428\");\n\n        FiatData fiatData = new FiatData(usdCurrencyData);\n\n        Transaction transaction = new Transaction(\n            \"NXT7Z2qAw4SFZpQaOyjZjak9B\",\n            \"0x02fc56662f353ebc4300d21690464e0e8afb77edc2329124b9f8b7e341f43896\",\n            \"6bf84342-606b-42c4-a3af-d738002e7f18\",\n            \"0xdac17f958d2ee523a2206206994597c13d831ec7\",\n            \"ETH\",\n            \"0.00042142\",\n            \"2020-07-28T13:53:24.674Z\",\n            fiatData\n        );\n\n        Event event = new Event(\"PG_DEPOSIT\", transaction);\n\n        String secret = \"9a994da63491f3ed5abcb948f9d1976dac831742\";\n\n        try {\n            String serializedEvent = new ObjectMapper().writeValueAsString(event);\n            String data = serializedEvent + \"/\" + secret;\n            String signature = \"0x\" + sha256Hex(data);\n            System.out.println(signature); // 0xa510ef563b337ee1ed5ec29e46caf6b4569d792d4f23f8e0721638da7373018e\n        } catch (JsonProcessingException e) {\n            System.out.println(\"Error serializing the event.\");\n        } catch (NoSuchAlgorithmException e) {\n            System.out.println(\"SHA-256 algorithm not available.\");\n        }\n    }\n\n    public static String sha256Hex(String data) throws NoSuchAlgorithmException {\n        MessageDigest digest = MessageDigest.getInstance(\"SHA-256\");\n        byte[] hash = digest.digest(data.getBytes(StandardCharsets.UTF_8));\n        return HexFormat.of().formatHex(hash);\n    }\n}\n```\n\n# Errors\n\nNexo utilizes standard HTTP response codes to signify the success or failure of an API request. Here is a general guideline:\n- Codes in the 2xx range signal successful operations.\n- Codes in the 4xx range indicate client-side errors, often due to incomplete or incorrect submission of information (such as missing a required parameter or failing authentication).\n- Codes in the 5xx range point to rare server-side errors within Nexo's systems.\n\n|Code|Status |Description                                                |\n|----|-------------|-----------------------------------------------------------|\n|200 |OK           |The request has been processed successfully.                |\n|400 |Bad Request  |The request could not be processed due to incorrect input.  |\n|401 |Unauthorized |Authentication failed, likely due to an invalid API key.    |\n|500, 502, 503, 504|Server Errors |An issue occurred on Nexo's side. (These instances are uncommon.)|\n\n## Error Handling\nThis section explains how to handle 4xx errors based on the `type` field. To handle 5xx errors, please use the `status` field, as this is a Server Error.\nErrors returned by our API are accompanied by a unique identifier in the type field of the error response.\nThis identifier is a URL linking to a specific section of our documentation that describes potential reasons for the error.\nWhile the full URL in the type field can be used directly, we recommend utilizing the last segment of this URL as a concise error identifier for easier handling.\n## bad_request_error\nWhen the API encounters a BadRequest, it means that the request could not be processed due to incorrect input. This typically occurs when the passed parameters violate the constraints described for a specific endpoint.\n\n|Identifier|Code|Title |Description                                    |\n|----------|----|-------------|-----------------------------------------------|\n|`bad_request_error`|400 |Bad Request  |The request could not be processed due to incorrect input.|\n\n**Recommendation**: Review and assess the parameters you`ve passed, keeping in mind the specific endpoint restrictions outlined in the Nexo Payment API documentation.\nEnsure that all inputs meet the required conditions for successful API calls.\n\n## unauthorized\nWhen the API returns an Unauthorized error, it indicates that the request has failed due to invalid authentication credentials.\nThis is typically because the API key provided is missing or invalid.\nAuthentication issues prevent the server from determining if you are authorized to access the requested resources.\n\n|Identifier|Code|Title |Description                                    |\n|----------|----|-------------|-----------------------------------------------|\n|`unauthorized`|401 |Unauthorized  |The request lacks valid credentials for authentication.|\n\n**Recommendation**: Ensure you verify your API keys per the API documentation guidelines.\nProper management of credentials is crucial to maintaining the security and integrity of your API interactions.\n\n## merchant_not_onboarded\nWhen the API returns a MerchantNotOnboarded error,  it means that the merchant account is either not  fully set up or the requested asset is not supported.  This error often indicates that the merchant has not  completed all necessary onboarding steps or that the  asset involved is not available for  deposit address creation through the API.\n|Identifier|Code|Title |Description                                         |\n|----------|----|-------------|-----------------------------------------------|\n|`merchant_not_onboarded`|400 |Bad Request |Merchant not onboarded, or asset not supported.|\n\n**Recommendation**: Verify that the merchant account is fully onboarded and check the list of supported assets. Ensure that all required setup processes are complete and that the assets you are attempting to create address with are supported by the API.\n\n## internal_server_error\nWhen the API encounters an InternalServerError,  it indicates a problem with the API's servers that prevents it from fulfilling the request.  This error is a general catch-all response for when the server encounters an unexpected condition that prevents it from completing the request.\n|Identifier|Code|Title |Description                                         |\n|----------|----|-------------|-----------------------------------------------|\n|`internal_server_error`|500 |Internal Server Error  |Internal backend server error.                      |\n\n**Recommendation**: This is usually a temporary issue. Retry your request after a few minutes.  If the problem persists, contact our support team for assistance and provide them with the relevant details of your request.\n# Release Notes\n## Overview\nWelcome to the Release Notes section of our API documentation! This space is dedicated to providing you with detailed and up-to-date information about the latest versions of our API. Each set of release notes is designed to help you understand what has changed, how these changes may impact your applications, and how you can take advantage of new features and improvements.\n### What You Will Find Here\n- **New Features**: Discover the latest functionalities we've added to enhance your development experience and expand your application's capabilities.\n- **Enhancements**: Learn about updates and optimizations that improve existing features, boosting performance and stability.\n- **Deprecated Features**: Stay informed about any features that are being phased out or replaced, including important dates and migration tips to ensure a smooth transition.\n- **Bug Fixes**: Get insights into minor and major issues that have been resolved in each new version.\n- **Known Issues**: Be aware of ongoing issues that we are currently addressing, and find temporary workarounds to keep your application running smoothly.\n- **Migration Guides**: Access detailed instructions and recommendations on how to upgrade your application to the latest version, ensuring compatibility and taking full advantage of new enhancements.\n\n We recommend reviewing the release notes with each new version of our API to stay informed about changes that could impact your projects.\n\n Thank you for choosing our API, and happy coding!\n\n## Versions\n### Version 1.0.0\nThis initial release establishes the foundation of our API with a focus on reliability, security, and ease of use. We provide you with robust tools and flexible endpoints to manage data, integrate complex functionalities, and enhance user experiences. As this is the first version, we are especially eager to hear from you. Your feedback is invaluable and will be directly used to shape future versions of this API.\n\n What You Will Find in This Documentation\n\n- **Getting Started Guide**: A straightforward introduction that will help you set up and make your first API call.\n- **Authentication**: Detailed information on how to securely connect to our API, including step-by-step instructions.\n- **Endpoint Descriptions**: Comprehensive details of each available API endpoint, including request and response formats, query parameters, and usage examples to help you understand how to interact with our API effectively.\n- **Error Codes and Messages**: An exhaustive list of potential errors, their meanings, and suggested solutions to help you troubleshoot common issues quickly.\n\n Your input is crucial to us. If you have suggestions, experience issues, or just want to share how you're using the API, please reach out to us. We are committed to continuously improving our services to meet your needs and expectations.\n"
+  },
+  "servers": [
+    {
+      "url": "https://pg.nexo.com",
+      "description": "Nexo Production API"
+    }
+  ],
+  "security": [
+    {
+      "api_key": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "Deposit Addresses (v1)",
+      "description": "  Operations concerning the creation and management of deposit addresses. A\n  deposit address provides a blockchain address, tailored to facilitate\n  distinct transactions per entity via a unique `referenceId`.\n \n  Workflow:\n  - One or more deposit addresses are generated based on the provided\n  `referenceId`.\n  - These addresses are associated with specific blockchain transactions,\n  and their creation invokes WebHook events, which notify you at a\n  configured URL about transaction activities.\n  - A deposit address remains unique to the `referenceId` across blockchains\n  of the same family. This means that repeating a `referenceId` in a request\n  within the same blockchain family will return the previously generated\n  address.\n \n  Benefits:\n  - **Streamlined Transactions**: Each entity interacts through a unique\n  blockchain address, enhancing tracking and management of individual\n  transactions.\n  - **Consistent Address Reuse**: For blockchains within the same family, a\n  single address can be reused for entities across different sessions or\n  interactions, reducing the need to generate multiple addresses and\n  simplifying the entity's experience.\n  - **Notifications**: Updates via WebHooks ensure timely responses to all\n  transaction activities related to the deposit addresses.\n \n  Restrictions:\n  - **Reference Identifier**: Reference Identifier (`referenceId`) is\n  versatile, but some basic constraints are placed:\n    - Up to 50 Characters in length can be passed.\n    - Only Latin characters [aA-zZ], numbers [0-9], dashes (-), backslashes (\\), underscore (_).\n"
+    },
+    {
+      "name": "Assets (v1)",
+      "description": "Operations related to the assets supported by the API, including listing available assets and providing detailed information about each asset's characteristics.\n"
+    }
+  ],
+  "paths": {
+    "/api/v1/deposit-addresses": {
+      "post": {
+        "tags": [
+          "Deposit Addresses (v1)"
+        ],
+        "summary": "Create a Deposit Address",
+        "description": "  Creates a deposit address associated with the provided `referenceId`. \n  This address facilitates the reception of cryptocurrency deposits.\n \n  If a deposit address already exists for the same `referenceId` in the same\n  blockchain family, the existing address is returned to prevent duplicate\n  address generation. This ensures efficient utilization of addresses within\n  the same blockchain type, where the same deposit address may be used for\n  multiple assets.\n  \n  Notifications for deposits to this address will be sent to the previously\n  configured WebHook URL, with details identifying the specific transaction\n  and `referenceId`.\n \n  Use this endpoint to streamline the management of deposit addresses,\n  reducing the need for multiple address generations, and enhancing tracking\n  capabilities.",
+        "operationId": "createDepositAddress",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateDepositAddressRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Create Deposit Address Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateDepositAddressResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": " Bad request - This error occurs when the request is improperly formatted or missing required information.\n Refer to the error message for more details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomErrorResponse"
+                },
+                "example": {
+                  "traceId": "038f3d4c-7c1f-400f-a28f-a89264d770ff",
+                  "type": "https://pg.nexo.com/#section/Errors/merchant_not_onboarded",
+                  "title": "Bad Request",
+                  "status": 400,
+                  "detail": "Merchant not onboarded, or asset not supported",
+                  "instance": "https://pg.nexo.com/api/v1/deposit-addresses",
+                  "errors": []
+                }
+              }
+            }
+          },
+          "401": {
+            "description": " Unauthorized - Occurs when the API key provided is invalid, expired, or\n missing in the request headers. Ensure your API key is correct and included in the header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomErrorResponse"
+                },
+                "example": {
+                  "traceId": "038f3d4c-7c1f-400f-a28f-a89264d770ff",
+                  "type": "https://pg.nexo.com/#section/Errors/unauthorized",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "Merchant not authorized",
+                  "instance": "https://pg.nexo.com/api/v1/deposit-addresses",
+                  "errors": []
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Indicates an error on the server side. If this error persists, contact Nexo Client Care for resolution.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomErrorResponse"
+                },
+                "example": {
+                  "traceId": "038f3d4c-7c1f-400f-a28f-a89264d770ff",
+                  "type": "https://pg.nexo.com/#section/Errors/internal_server_error",
+                  "title": "Internal Server Error",
+                  "status": 500,
+                  "detail": "An unexpected error occurred. Please try again later.",
+                  "instance": "https://pg.nexo.com/api/v1/deposit-addresses",
+                  "errors": []
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    },
+    "/api/v1/assets": {
+      "get": {
+        "tags": [
+          "Assets (v1)"
+        ],
+        "summary": "List Supported Assets",
+        "description": "Returns all assets available for the merchant through the Nexo Payment Gateway. This includes metadata such as symbol, blockchain, and other relevant properties.\n",
+        "operationId": "listSupportedAssets",
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved the list of supported assets for merchant.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Assets"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": " Bad request - This error occurs when the request is improperly formatted or missing required information.\n Refer to the error message for more details.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomErrorResponse"
+                },
+                "example": {
+                  "traceId": "038f3d4c-7c1f-400f-a28f-a89264d770ff",
+                  "type": "https://pg.nexo.com/#section/Errors/bad_request_error",
+                  "title": "Bad Request",
+                  "status": 400,
+                  "detail": "Bad Request",
+                  "instance": "https://pg.nexo.com/api/v1/assets",
+                  "errors": []
+                }
+              }
+            }
+          },
+          "401": {
+            "description": " Unauthorized - Occurs when the API key provided is invalid, expired, or\n missing in the request headers. Ensure your API key is correct and included in the header.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomErrorResponse"
+                },
+                "example": {
+                  "traceId": "038f3d4c-7c1f-400f-a28f-a89264d770ff",
+                  "type": "https://pg.nexo.com/#section/Errors/unauthorized",
+                  "title": "Unauthorized",
+                  "status": 401,
+                  "detail": "Merchant not authorized",
+                  "instance": "https://pg.nexo.com/api/v1/assets",
+                  "errors": []
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error - Indicates an error on the server side. If this error persists, contact Nexo Client Care for resolution.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CustomErrorResponse"
+                },
+                "example": {
+                  "traceId": "038f3d4c-7c1f-400f-a28f-a89264d770ff",
+                  "type": "https://pg.nexo.com/#section/Errors/internal_server_error",
+                  "title": "Internal Server Error",
+                  "status": 500,
+                  "detail": "An unexpected error occurred. Please try again later.",
+                  "instance": "https://pg.nexo.com/api/v1/assets",
+                  "errors": []
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "api_key": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "api_key": {
+        "type": "apiKey",
+        "description": "The `API Key` value, passed in the x-api-key header",
+        "name": "x-api-key",
+        "in": "header"
+      }
+    },
+    "schemas": {
+      "CreateDepositAddressRequest": {
+        "required": [
+          "asset",
+          "referenceId"
+        ],
+        "type": "object",
+        "properties": {
+          "referenceId": {
+            "maxLength": 50,
+            "minLength": 0,
+            "pattern": "^[a-zA-Z0-9\\-_]+$",
+            "type": "string",
+            "description": "A unique identifier provided by the merchant used to reference the deposit address.",
+            "example": "merchant_reference_ID-1"
+          },
+          "asset": {
+            "pattern": "^[a-zA-Z0-9\\-_]+$",
+            "type": "string",
+            "description": "The type of cryptocurrency asset for which the deposit address is being created.",
+            "example": "BTC"
+          }
+        },
+        "description": "Request payload containing necessary data to create a new deposit address or retrieve an existing one."
+      },
+      "CreateDepositAddressResponse": {
+        "type": "object",
+        "properties": {
+          "referenceId": {
+            "type": "string",
+            "description": "A unique reference identifier generated for the merchant's deposit address.",
+            "example": "merchant_reference_ID-1"
+          },
+          "asset": {
+            "type": "string",
+            "description": "The type of cryptocurrency asset for which the deposit address has been created.",
+            "example": "BTC"
+          },
+          "blockchain": {
+            "type": "string",
+            "description": "The blockchain network (Ethereum, Bitcoin, etc.) associated with the asset.",
+            "example": "bitcoin"
+          },
+          "address": {
+            "type": "string",
+            "description": "The blockchain address created for depositing the specified asset.",
+            "example": "bc1qct9wk67qup7wz8p772r700prd74rhngnml0jcu"
+          }
+        },
+        "description": "Successfully created or retrieved an existing deposit address. **Created:** A new deposit address has been generated for the `referenceId`. **Existing:** An existing address matching the `referenceId` and `blockchain type` was found and returned."
+      },
+      "CustomErrorDetails": {
+        "type": "object",
+        "properties": {
+          "field": {
+            "type": "string",
+            "description": "The name of the field involved in the error, if applicable.",
+            "example": "referenceId"
+          },
+          "detail": {
+            "type": "string",
+            "description": "A detailed message about the error concerning the field.",
+            "example": "Invalid format for reference ID."
+          }
+        },
+        "description": "A list of detailed errors, if multiple issues occurred during the request.",
+        "example": [
+          {
+            "field": "referenceId",
+            "detail": "Invalid format for reference ID."
+          },
+          {
+            "field": "referenceId",
+            "detail": "Reference ID must be at least 6 characters."
+          }
+        ]
+      },
+      "CustomErrorResponse": {
+        "type": "object",
+        "properties": {
+          "traceId": {
+            "type": "string",
+            "description": "A unique identifier for the request that can be used to trace the error.",
+            "example": "a1b2c3d4-e5f6-7g8h-9i0j-k11l12m13n14"
+          },
+          "type": {
+            "type": "string",
+            "description": "A URI that categorizes the type of error.",
+            "example": "https://example.com/error/type/invalid-request"
+          },
+          "title": {
+            "type": "string",
+            "description": "A short, human-readable summary of the error.",
+            "example": "Invalid Request"
+          },
+          "status": {
+            "type": "integer",
+            "description": "The HTTP status code associated with this error.",
+            "format": "int32",
+            "example": 400
+          },
+          "detail": {
+            "type": "string",
+            "description": "A human-readable explanation specific to this occurrence of the error.",
+            "example": "Invalid request params"
+          },
+          "instance": {
+            "type": "string",
+            "description": "A URI that uniquely identifies the specific occurrence of the error within the API",
+            "example": "https://pg.nexo.com/api/v1/deposit-addresses"
+          },
+          "errors": {
+            "type": "array",
+            "description": "A list of detailed errors, if multiple issues occurred during the request.",
+            "example": [
+              {
+                "field": "referenceId",
+                "detail": "Invalid format for reference ID."
+              },
+              {
+                "field": "referenceId",
+                "detail": "Reference ID must be at least 6 characters."
+              }
+            ],
+            "items": {
+              "$ref": "#/components/schemas/CustomErrorDetails"
+            }
+          }
+        }
+      },
+      "Asset": {
+        "description": "Single asset response.",
+        "example": [
+          {
+            "asset": "ETH",
+            "blockchain": "Ethereum",
+            "address": "0xa3f450855eC9DC109428B5ee7a37DE696949301e",
+            "decimals": 18
+          },
+          {
+            "asset": "BTC",
+            "blockchain": "Bitcoin",
+            "address": "bc1qct9wk67qup7wz8p772r700prd74rhngnml0jcu",
+            "decimals": 8
+          }
+        ],
+        "properties": {
+          "asset": {
+            "description": "The supported asset symbol. (e.g. BTC, ETH, USDC).",
+            "example": "BTC",
+            "type": "string"
+          },
+          "blockchain": {
+            "description": "The name of the blockchain network where the asset is deployed (e.g. Ethereum, Bitcoin). Please refer to the list of supported networks.",
+            "example": "Bitcoin",
+            "type": "string"
+          },
+          "address": {
+            "description": "The blockchain address of the asset. If the asset is native to the blockchain, this will be an empty string. For non-native tokens, this will be the specific address on the blockchain.",
+            "example": "bc1qct9wk67qup7wz8p772r700prd74rhngnml0jcu",
+            "type": "string"
+          },
+          "decimals": {
+            "description": "The number of decimals the asset uses to define its smallest unit.",
+            "example": 8,
+            "format": "int32",
+            "type": "integer"
+          }
+        },
+        "type": "object"
+      },
+      "Assets": {
+        "description": "Supported assets response.",
+        "properties": {
+          "assets": {
+            "description": "A list of supported assets.",
+            "example": [
+              {
+                "asset": "ETH",
+                "blockchain": "ethereum",
+                "address": "",
+                "decimals": 18
+              },
+              {
+                "asset": "USDT_ETH",
+                "blockchain": "ethereum",
+                "address": "0xdac17f958d2ee523a2206206994597c13d831ec7",
+                "decimals": 6
+              },
+              {
+                "asset": "BTC",
+                "blockchain": "bitcoin",
+                "address": "",
+                "decimals": 8
+              }
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Asset"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object"
+      }
+    }
+  },
+  "x-tagGroups": [
+    {
+      "tags": [
+        "Assets (v1)"
+      ],
+      "name": "Assets API"
+    },
+    {
+      "tags": [
+        "Deposit Addresses (v1)"
+      ],
+      "name": "Deposit Addresses API"
+    }
+  ]
+}
